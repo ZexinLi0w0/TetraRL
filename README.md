@@ -118,6 +118,48 @@ by the CPO recovery step (Achiam et al., 2017).  This layer ensures that
 Lagrangian constraint violations, which occur in 20–30% of episodes even under
 well-tuned dual variables, do not translate to catastrophic system failures.
 
+## Supported RL Algorithms
+
+A core design goal of TetraRL is to validate the generality of 4-D
+co-optimization across fundamentally different RL paradigms.  Prior systems in
+this research line — R³ (Li et al., RTSS 2023) and DuoJoule (Shirvani et al.,
+RTSS 2024) — exclusively support off-policy, replay-based algorithms (DQN,
+DDQN, C51) whose replay buffers serve as the primary runtime knob.  TetraRL
+extends algorithm coverage to on-policy, non-replay methods (A2C, A3C, PPO),
+where rollout buffers, update epochs, and worker counts replace the replay
+buffer as the dominant resource knobs.  Demonstrating that the same 4-D
+Pareto-tracking runtime operates correctly under both paradigms is essential
+evidence that the R⁴ framework is algorithm-agnostic rather than an artifact of
+off-policy buffer manipulation.
+
+| Algorithm | Paradigm | Action Space | Origin / Inheritance | TetraRL Module | R⁴ Knobs Available |
+|-----------|----------|--------------|----------------------|----------------|--------------------|
+| DQN | Off-policy / replay-based | Discrete | Inherited from R³ / DuoJoule baseline | `tetrarl/morl/agents/dqn.py` | `batch_size`, `replay_buffer_size`, DVFS, `mixed_precision` |
+| DDQN | Off-policy / replay-based | Discrete | Inherited from R³ / DuoJoule baseline | `tetrarl/morl/agents/ddqn.py` | `batch_size`, `replay_buffer_size`, DVFS, `mixed_precision` |
+| C51 | Off-policy / replay-based (distributional) | Discrete | Inherited from R³ / DuoJoule baseline | `tetrarl/morl/agents/c51.py` | `batch_size`, `replay_buffer_size`, DVFS, `mixed_precision` |
+| SAC | Off-policy / replay-based (actor-critic) | Continuous | New for TetraRL (continuous control) | `tetrarl/morl/agents/sac.py` | `batch_size`, `replay_buffer_size`, DVFS, `mixed_precision` |
+| A2C | On-policy / non-replay | Both | New for TetraRL (non-replay extension §9) | `tetrarl/morl/agents/a2c.py` | `n_steps`, `n_envs`, `n_epochs`, `mini_batch_size`, DVFS, `mixed_precision` |
+| A3C | On-policy / non-replay (async) | Both | New for TetraRL (non-replay extension §9) | `tetrarl/morl/agents/a3c.py` | `n_steps`, `n_envs`, `n_workers`, DVFS, `mixed_precision` |
+| PPO | On-policy / non-replay | Both | New for TetraRL (non-replay extension §9) | `tetrarl/morl/agents/ppo.py` | `n_steps`, `n_envs`, `n_epochs`, `mini_batch_size`, `KL_coef`, DVFS, `mixed_precision`, `gradient_checkpointing` |
+
+**Unified Resource Primitives.**  Despite the apparent diversity of knobs
+across algorithm families, all seven algorithms map to four resource primitives
+at the system level: *C_sample* (environment interaction cost), *C_update*
+(gradient computation cost), *M_store* (buffer or rollout memory occupancy),
+and *τ* (communication and synchronization overhead).  Tuning
+`replay_buffer_size` in an off-policy agent and tuning `n_steps` in an
+on-policy agent are both mapped to capacity limits on *M_store*; adjusting DVFS
+frequencies imposes a hard power cap on *C_update*.  This unified abstraction
+enables the Resource Manager to operate identically regardless of the
+underlying algorithm, which is the central systems contribution of TetraRL.
+
+**Implementation roadmap** (per [`docs/action-plan-weekly.md`](docs/action-plan-weekly.md)):
+
+- **Weeks 1–3**: PD-MORL DQN / DDQN / C51 baselines (replay-based, single-environment smoke validation)
+- **Weeks 4–6**: SAC continuous-control + Lagrangian PPO (mixed paradigm)
+- **Weeks 7–8**: A2C / A3C / PPO full integration with Resource Primitives mapper
+- **Week 9+**: Multi-platform ablations across all seven algorithms
+
 ## Repository Layout
 
 ```
