@@ -281,6 +281,16 @@ in [`reproduce/README.md`](reproduce/README.md).
   year      = {2023},
   organization = {IEEE}
 }
+
+@inproceedings{duojoule2024,
+  title     = {DuoJoule: Accurate On-Device Deep Reinforcement Learning
+               for Energy and Timeliness},
+  author    = {Shirvani, Soheil and Samanta, Aritra
+               and Li, Zexin and Liu, Cong},
+  booktitle = {2024 IEEE Real-Time Systems Symposium (RTSS)},
+  year      = {2024},
+  organization = {IEEE}
+}
 ```
 
 ## License
