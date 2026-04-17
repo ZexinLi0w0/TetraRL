@@ -57,3 +57,10 @@ results/*
 results/week1_orin_validation/*
 !results/week1_orin_validation/progress.json
 !results/week1_orin_validation/eval_results.json
+
+# C-MORL / PGMORL training artifacts (regenerated, not source)
+tetrarl/morl/c_morl/externals/**/time_limit_logs/
+tetrarl/morl/c_morl/externals/**/logs/
+tetrarl/morl/c_morl/externals/**/trained_models/
+**/*.monitor.csv
+**/*.monitor.json
