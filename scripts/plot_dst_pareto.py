@@ -19,9 +19,8 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 
 DST_PARETO_OPTIMAL = np.array([
     [1, -1], [2, -3], [3, -5], [5, -7], [8, -8],

@@ -11,6 +11,8 @@ Usage:
         --device cuda --out-json eval_results.json
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
@@ -22,7 +24,6 @@ import torch
 from tetrarl.envs.dst import DeepSeaTreasure
 from tetrarl.eval.hypervolume import hypervolume, pareto_filter
 from tetrarl.morl.agents.pd_morl import PDMORLAgent
-
 
 DST_REFERENCE_POINT = np.array([0.0, -25.0])
 DST_REFERENCE_HV = 229.0
@@ -85,8 +86,8 @@ def main() -> None:
         device = args.device
 
     env = DeepSeaTreasure()
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.n
+    state_dim = 2
+    action_dim = 4
     n_objectives = env.reward_dim
     env.close()
 
@@ -103,7 +104,8 @@ def main() -> None:
     print(f"  step_count = {agent.step_count}")
 
     anchors = make_anchors_2d(args.n_anchors)
-    print(f"Evaluating on {args.n_anchors} anchors x {args.episodes_per_anchor} episodes ...")
+    n, e = args.n_anchors, args.episodes_per_anchor
+    print(f"Evaluating on {n} anchors x {e} episodes ...")
 
     t0 = time.time()
     returns = evaluate_policy(agent, anchors, args.episodes_per_anchor, args.seed)
@@ -140,7 +142,7 @@ def main() -> None:
     print(f"  Reference HV: {DST_REFERENCE_HV}")
     print(f"  Gap          : {gap_pct:.2f}%")
     print(f"  |Pareto front|: {len(front)}")
-    print(f"  Pareto points:")
+    print("  Pareto points:")
     for pt in sorted(front.tolist(), key=lambda x: x[0]):
         print(f"    treasure={pt[0]:>6.1f}  time_penalty={pt[1]:>6.1f}")
     print(f"  Eval time    : {elapsed:.1f}s")

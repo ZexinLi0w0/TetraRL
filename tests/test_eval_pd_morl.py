@@ -5,10 +5,8 @@ import os
 import tempfile
 
 import numpy as np
-import pytest
 import torch
 
-from tetrarl.envs.dst import DeepSeaTreasure
 from tetrarl.eval.hypervolume import hypervolume, pareto_filter
 from tetrarl.morl.agents.pd_morl import PDMORLAgent
 
