@@ -33,73 +33,68 @@
 ---
 
 ### Week 2 (2026-04-27 to 2026-05-03)
-**Theme**: Continuous-action PD-MORL (MO-TD3-HER → MO-SAC-HER) on MuJoCo
+**Theme**: C-MORL (ICLR 2025) Integration as Building Block
 
 **Concrete tasks**:
-1. Implement `tetrarl/morl/mo_sac_her.py` — port PD-MORL's MO-TD3-HER (Basaklar 2023 Eq. 11–12) to SAC by adding the directional regularization term `g(ω_p, Q) = arccos(Sc(ω_p, Q))` to both the SAC critic and actor losses. Apply PD-MORL cosine-similarity from Basaklar 2023 → `loss.py`.
-2. Implement HER-style preference replay: each transition is re-labeled with N_w = 32 resampled ω′ values (borrowing from Yang 2019 but adapted to the PD-MORL cosine operator).
-3. Configure MO-MuJoCo benchmarks (Walker2d, HalfCheetah) following PD-MORL's experimental setup (1M steps each).
-4. Run MO-SAC-HER on MO-Walker2d and MO-HalfCheetah; log HV, Sparsity, and per-objective return curves.
+1. Incorporate C-MORL (Constrained MORL) repository as the foundational algorithm block (`tetrarl/morl/c_morl_agent.py`), replacing the previous C-MORL / PD-MORL continuous action direction.
+2. Run C-MORL on the `Building-3d` benchmark locally to validate baseline performance and understand the CPO/IPO constraint mechanism (as it strongly aligns with our constraint-based setting).
+3. Refactor C-MORL's PPO+GAE implementation to cleanly interface with our `tetrarl/core/` framework.
+4. Run initial sanity checks to ensure the two-stage Pareto discovery (Init Stage + Constraint Stage) operates correctly.
 
 **Deliverables**:
-- `tetrarl/morl/mo_sac_her.py` — continuous-action MO-SAC-HER agent
-- `tetrarl/morl/loss.py` — modular loss functions (cosine-similarity critic loss, directional actor loss)
-- HV comparison table (MO-SAC-HER vs. PD-MORL MO-TD3-HER vs. Envelope MOQL on Walker2d/HalfCheetah)
+- `tetrarl/morl/c_morl_agent.py` — functional C-MORL agent adapted for our repo
+- Baseline reproduction curves for `Building-3d` (Init Stage vs Constraint Stage)
 
 **Validation criteria**:
-- MO-Walker2d HV reaches ≥5.0e6 (PD-MORL reports 5.41e6 with TD3; ≥92% is acceptable for the SAC port).
-- No NaN or divergence in any training run across 3 random seeds.
+- Successfully reproduce C-MORL Pareto front on `Building-3d` within 10% of the paper's reported hypervolume.
+- No NaN or divergence in the CPO/IPO constraint stages.
 
 **Risk / Pitfall to watch**:
-- PD-MORL's original paper uses TD3; the SAC migration adds entropy regularization that may interact adversely with the directional loss term. Monitor the α (entropy coefficient) auto-tuning and clamp if critic loss spikes.
+- C-MORL relies on older versions of `mujoco-py` and Python. Ensure dependencies are cleanly isolated or updated to be compatible with our modern stack (Python 3.10+).
 
 ---
 
 ### Week 3 (2026-05-04 to 2026-05-10)
-**Theme**: 4-D reward vector, z-score normalization, and RBF interpolator
+**Theme**: 4-D Objective Vector & Mo-Gymnasium Environment Integration
 
 **Concrete tasks**:
-1. Define the 4-D reward vector `r = [r_env, −c_L(L_prev), −c_E(E_step), −c_M(M_util)]` in `tetrarl/core/reward.py`. Implement per-dimension running z-score normalization with a 1k-step warmup window.
-2. Implement the RBF interpolator I(ω) in `tetrarl/morl/interpolator.py`. Pre-train on 11 anchor preferences: 4 one-hot corners + 6 edge midpoints + 1 center (per PD-MORL Basaklar 2023 §4.2). Validate projection quality by checking that one-hot ω inputs recover the corresponding extremal Q-vector directions.
-3. Implement structured preference sampling in `tetrarl/morl/preference.py`: corner sampling (one-hot) + edge + interior, replacing uniform Dirichlet (following the reusable insight from Envelope MORL Yang 2019).
-4. Run MO-SAC-HER on a synthetic 4-D MuJoCo variant (HalfCheetah with two artificial cost dimensions appended) to stress-test the z-score normalization and interpolator under heterogeneous scales.
+1. Define the 4-D objective vector `r = [performance, -energy, -memory, -latency]` in `tetrarl/core/reward.py`.
+2. Wrap the Jetson DAG workload scheduling problem into a strict `mo-gymnasium` compatible environment API (`tetrarl/envs/dag_scheduler.py`), as C-MORL expects this interface.
+3. Setup C-MORL constraint thresholds: map the latency deadline and memory budget directly to the CPO/IPO constraint thresholds in the second stage of C-MORL.
+4. Run C-MORL on a simulated 4-D DAG scheduling environment to verify that the constraint stage correctly handles memory and latency bounds.
 
 **Deliverables**:
-- `tetrarl/core/reward.py` — 4-D reward vector with z-score normalization
-- `tetrarl/morl/interpolator.py` — RBF interpolator with 11-anchor pre-training
-- Training curve showing stable 4-D HV convergence on synthetic HalfCheetah-4D (no divergence over 500k steps)
+- `tetrarl/envs/dag_scheduler.py` — `mo-gymnasium` compatible scheduling env
+- 4-D constraint mapping logic in the C-MORL agent
 
 **Validation criteria**:
-- Z-score normalization ensures all 4 reward dimensions have mean ≈ 0 and std ≈ 1 after the warmup window (verified via logged statistics).
-- RBF interpolator reconstruction error ≤ 5% on held-out anchor preferences.
+- C-MORL constraint stage successfully identifies and optimizes policies that respect the simulated memory budget and deadline.
 
 **Risk / Pitfall to watch**:
-- The RBF interpolator may produce mis-projections at DVFS step-jump boundaries because the hardware cost surface is discontinuous at frequency jumps (identified in §7 limitation 7 of the brainstorm document). On simulator this week, verify that the interpolator handles step-function cost surfaces by testing with a piecewise-constant synthetic cost dimension.
+- C-MORL's scalarization in the Init Stage might ignore constraints initially. Ensure the Constraint Stage is triggered correctly to fix boundary violations.
 
 ---
 
 ### Week 4 (2026-05-11 to 2026-05-17)
-**Theme**: Lagrangian dual-variable infrastructure and PPO-Lagrangian baseline
+**Theme**: Action Masking & GNN Feature Extractor
 
 **Concrete tasks**:
-1. Implement the Lagrangian dual-variable updater in `tetrarl/sys/lagrangian.py` using a PI controller with initial gains K_P = K_I = 10⁻⁴, K_D = 0, and anti-windup cap I_max (directly borrowing from Lagrangian-Empirical Spoor 2025).
-2. Implement the hardware-emergency override layer in `tetrarl/sys/override.py`, inspired by the CPO recovery step (Achiam 2017 Eq. 14): when energy or memory limits are exceeded, the override ignores policy gradients and forces conservative action.
-3. Integrate PPO-Lagrangian baseline using OmniSafe (Ji 2023) as the starting codebase. Configure the CMDP wrapper with memory and energy constraints.
-4. Run PPO-Lagrangian on PyBullet (HalfCheetah, Ant) with simulated energy/memory costs to validate mathematical correctness of dual updates. Apply FOCOPS (Zhang NeurIPS 2020) first-order primal-dual update as an ablation arm.
-5. Implement the unified knob taxonomy (§9.4): map `replay_buffer_size` (off-policy) and `n_steps` (on-policy) to a common `M_store` primitive in `tetrarl/sys/knob_mapper.py`.
+1. Implement Action Masking for hard real-time constraints: at state $S_t$, mask out DVFS actions that mathematically guarantee a deadline miss. Integrate this mask into C-MORL's PPO actor network.
+2. Implement the hardware-emergency override layer in `tetrarl/sys/override.py` as a fallback safety net.
+3. Integrate Graph Neural Networks (GNNs) as the feature extractor for the C-MORL actor-critic networks to ensure generalization across different DAG topologies (learning topology, not just static task IDs).
+4. Run end-to-end simulated validation of C-MORL + Masking + GNN.
 
 **Deliverables**:
-- `tetrarl/sys/lagrangian.py` — PI-based dual-variable updater with anti-windup
-- `tetrarl/sys/override.py` — hardware-emergency override layer
-- `tetrarl/sys/knob_mapper.py` — unified PPO/SAC primitive mapper
-- PPO-Lagrangian convergence plots on PyBullet with constraint satisfaction curves (cost vs. limit over training)
+- `tetrarl/core/masking.py` — Action masking logic
+- `tetrarl/gnn/extractor.py` — GNN feature extractor
+- `tetrarl/sys/override.py` — Hardware-emergency override layer
 
 **Validation criteria**:
-- PPO-Lagrangian on PyBullet-HalfCheetah converges to ≥80% of unconstrained PPO reward while maintaining constraint violations below the specified limit for ≥90% of evaluation episodes.
-- The override layer triggers correctly when simulated energy exceeds threshold (unit-tested).
+- Action masking reduces early-training deadline violations by >80%.
+- GNN extractor enables zero-shot transfer to unseen DAG topologies with <15% performance drop.
 
 **Risk / Pitfall to watch**:
-- Lagrangian methods frequently violate constraints even in simulations (Spoor 2025 reports cost of 30.84 vs. limit 25 in PointGoal1). The override layer must be validated as the true safety net this week, not the Lagrangian itself.
+- Action masking changes the valid action space dynamically, which can interfere with PPO's probability ratio calculations. Ensure masked actions are correctly assigned -inf logits.
 
 ---
 
@@ -135,8 +130,8 @@
 1. Implement the four-component framework shell in `tetrarl/core/framework.py`: (i) Preference Plane, (ii) Resource Manager, (iii) RL Arbiter, (iv) Hardware Override Layer. Wire the data flow: Preference Plane → RL Arbiter → Resource Manager → Override → DVFS/Memory actuators.
 2. Implement pre-allocated max replay buffer with index-mask soft truncation in `tetrarl/sys/buffer.py` (avoiding physical deallocation/reallocation per §9.7 pitfall 2; reusing R³ memory layout Li 2023). Pre-allocate at initialization, use index masking for runtime "soft truncation."
 3. Integrate the state cache + soft-link replay buffer from R³ (Li 2023) for stacked-frame environments.
-4. Port the full MO-SAC-HER agent to run on Orin AGX with the tegrastats daemon providing real energy/memory readings. Replace simulated reward dimensions with real hardware metrics.
-5. Run a first end-to-end loop: CartPole (Classic Control) with MO-SAC-HER + DVFS + tegrastats on Orin AGX. Log all 4 dimensions over 100 episodes.
+4. Port the full C-MORL agent to run on Orin AGX with the tegrastats daemon providing real energy/memory readings. Replace simulated reward dimensions with real hardware metrics.
+5. Run a first end-to-end loop: CartPole (Classic Control) with C-MORL + DVFS + tegrastats on Orin AGX. Log all 4 dimensions over 100 episodes.
 
 **Deliverables**:
 - `tetrarl/core/framework.py` — four-component framework orchestrator
@@ -157,7 +152,7 @@
 **Theme**: Full closed-loop validation with SAC + PPO on Orin AGX
 
 **Concrete tasks**:
-1. Run MO-SAC-HER (off-policy) on DonkeyCar simulator with DVFS + tegrastats on Orin AGX for 500 episodes. Sweep 5 representative preference vectors ω (one-hot corners + center).
+1. Run C-MORL (off-policy) on DonkeyCar simulator with DVFS + tegrastats on Orin AGX for 500 episodes. Sweep 5 representative preference vectors ω (one-hot corners + center).
 2. Run PPO-Lagrangian (on-policy) on PyBullet-HalfCheetah with the unified knob mapper (`n_steps`, `n_epochs`, `mini_batch_size` as knobs per §9.2) on Orin AGX. Validate that the Lagrangian dual variables converge and constraints are respected (with override layer as safety net).
 3. Implement the "thinking-while-moving" concurrent decision trick from DVFO (Zhang TMC 2023) in `tetrarl/sys/concurrent.py` — overlap DVFS decision computation with RL forward pass to mask decision-loop overhead.
 4. Generate Pareto front visualization: 2-D projections of the 4-D Pareto front (T vs. A, E vs. A, M vs. A) for the DonkeyCar-SAC runs. Compute HV indicator.
@@ -209,7 +204,7 @@
 
 **Concrete tasks**:
 1. Port the tegrastats daemon and DVFS controller to Xavier NX and Jetson Nano. Adjust frequency tables and EMA filter parameters per platform. Re-profile DVFS transition latencies.
-2. Run the full MO-SAC-HER pipeline on Xavier NX (DonkeyCar, 500 episodes, 5 preference vectors). Adjust super-block granularity N if DVFS overhead differs from Orin.
+2. Run the full C-MORL pipeline on Xavier NX (DonkeyCar, 500 episodes, 5 preference vectors). Adjust super-block granularity N if DVFS overhead differs from Orin.
 3. Run a reduced-scope experiment on Jetson Nano (CartPole + Classic Control only, due to memory constraints). Validate that the override layer correctly prevents OOM on Nano's 4 GB memory.
 4. Incorporate the DVFS-DRL-Multitask (2024) soft-deadline reward shaping (Algorithm 3) as an additional baseline. Run on all 3 platforms.
 5. Collect tail-latency CDFs across all 3 platforms for the same preference vector. Generate a 3-panel CDF figure (one per platform).
@@ -322,7 +317,7 @@ Week 1 ──→ Week 2 ──→ Week 3 ──→ Week 4  (sequential: algorith
 
 **Critical path**: Weeks 1 → 2 → 3 → 5 → 6 → 7 → 10 → 11 → 12
 
-- **Week 2 blocks Week 3**: MO-SAC-HER must work before 4-D reward vector can be tested.
+- **Week 2 blocks Week 3**: C-MORL must work before 4-D reward vector can be tested.
 - **Week 3 blocks Week 5**: The z-score normalization and interpolator must be validated on simulator before integration with real hardware sensors.
 - **Week 4 is semi-independent**: PPO-Lagrangian baseline and override layer can be developed in parallel with Week 3, but both must be ready before Week 6 integration.
 - **Week 5 blocks Week 6**: Tegrastats daemon and DVFS controller must function before the four-component framework can be wired.
@@ -339,7 +334,7 @@ Week 1 ──→ Week 2 ──→ Week 3 ──→ Week 4  (sequential: algorith
 | Week | Built-in Slack | Contingency if Delayed |
 |------|---------------|----------------------|
 | Week 1 | 0.5 days | DST reproduction is straightforward; if CI setup takes longer, defer to Week 2 |
-| Week 2 | 0 days (tight) | If MO-SAC-HER diverges, fall back to MO-TD3-HER verbatim and revisit SAC port in Week 4 buffer |
+| Week 2 | 0 days (tight) | If C-MORL diverges, fall back to MO-TD3-HER verbatim and revisit SAC port in Week 4 buffer |
 | Week 3 | 1 day | Interpolator pre-training is lightweight; risk is in the synthetic 4-D benchmark setup |
 | Week 4 | 1.5 days | PPO-Lagrangian is well-documented in OmniSafe; reserve buffer for integration debugging |
 | Week 5 | 1 day | DVFS profiling is mechanical; risk is in tegrastats daemon stability under long runs |
