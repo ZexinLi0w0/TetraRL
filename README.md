@@ -162,10 +162,12 @@ underlying algorithm, which is the central systems contribution of TetraRL.
 
 **Implementation roadmap** (per [`docs/action-plan-weekly.md`](docs/action-plan-weekly.md)):
 
-- **Weeks 1–3**: PD-MORL DQN / DDQN / C51 baselines (replay-based, single-environment smoke validation)
-- **Weeks 4–6**: SAC continuous-control + Lagrangian PPO (mixed paradigm)
-- **Weeks 7–8**: A2C / A3C / PPO full integration with Resource Primitives mapper
-- **Week 9+**: Multi-platform ablations across all seven algorithms
+- **Week 1**: Repo skeleton + Hypervolume eval module + GUDA-MountainCar smoke env (✅ Done)
+- **Week 2**: **C-MORL (ICLR 2025) Integration** as the foundational building block — reproduce on `Building-3d` benchmark, validate two-stage Pareto discovery (Init + CPO/IPO Constraint stages)
+- **Week 3**: 4-D objective vector `[performance, -energy, -memory, -latency]` + `mo-gymnasium` compatible DAG scheduling environment, mapping latency deadlines and memory budgets directly to C-MORL's CPO/IPO constraint thresholds
+- **Week 4**: **Action Masking** (mask DVFS actions guaranteed to miss deadlines) + **GNN Feature Extractor** (topology-aware generalization across DAG sets) + Hardware-emergency override layer
+- **Weeks 5–8**: Orin AGX systems integration — tegrastats sensor daemon, DVFS controller, four-component framework (Preference Plane / Resource Manager / RL Arbiter / Override), pre-allocated soft-truncation replay buffer, full closed-loop validation with FFmpeg co-runner interference
+- **Weeks 9–12**: Multi-platform porting (Xavier NX + Jetson Nano), full evaluation matrix, ablation studies, paper draft for IEEE Transactions on Computers (TC) submission
 
 ## Repository Layout
 
