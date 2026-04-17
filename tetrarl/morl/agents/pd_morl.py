@@ -128,12 +128,12 @@ class PDMORLAgent:
             return random.randrange(self.action_dim)
 
         with torch.no_grad():
-            s = torch.tensor(
-                state, dtype=torch.float32, device=self.device
-            ).unsqueeze(0)
-            w = torch.tensor(
-                omega, dtype=torch.float32, device=self.device
-            ).unsqueeze(0)
+            s = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(
+                0
+            )
+            w = torch.tensor(omega, dtype=torch.float32, device=self.device).unsqueeze(
+                0
+            )
             q = self.q_net(s, w)
             return action_selection(w, q).item()
 
@@ -194,7 +194,7 @@ class PDMORLAgent:
             targets = rewards + self.gamma * (1 - dones.unsqueeze(-1)) * q_next_selected
 
         td_error = targets - q_taken
-        mse_loss = (td_error ** 2).mean()
+        mse_loss = (td_error**2).mean()
 
         env_op = envelope_operator(omegas, q_taken)
         env_op_target = envelope_operator(omegas, targets)
