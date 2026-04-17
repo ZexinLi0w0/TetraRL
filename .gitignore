@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+.env
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Training artifacts
+runs/
+checkpoints/
+*.pth
+*.h5
+*.onnx
+
+# Logs
+*.log
+logs/
+
+# Jetson / tegrastats
+tegrastats_*.csv
+
+# Misc
+*.bak
+*.tmp

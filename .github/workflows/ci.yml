@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feature/*", "week-*"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install ruff
+      - run: ruff check tetrarl/ tests/
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/ -v --tb=short
+
+  smoke-imports:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -e .
+      - name: Verify core imports
+        run: |
+          python -c "import tetrarl"
+          python -c "from tetrarl.morl import pd_morl, operators"
+          python -c "from tetrarl.sys import tegrastats_daemon, dvfs_controller, override_layer"
+          python -c "from tetrarl.eval import hypervolume, tail_latency"
