@@ -1,0 +1,21 @@
+C-MORL — Vendored Source Code Attribution
+==========================================
+
+Original Repository:
+    https://github.com/RuohLiuq/C-MORL
+
+Paper:
+    "Efficient Discovery of Pareto Front for Multi-Objective Reinforcement Learning"
+    Published at ICLR 2025
+
+Authors:
+    Ruohong Liu, Yuxin Pan, Linjie Xu, Lei Song, Pengcheng You, Yize Chen, Jiang Bian
+
+License:
+    No explicit license file was found in the original repository.
+    This vendored copy is included for research purposes under fair use.
+    If a license is later specified by the original authors, it will be adopted here.
+
+Modifications:
+    - Minimal import path adjustments for integration into the TetraRL package.
+    - No algorithmic changes to the original implementation.
