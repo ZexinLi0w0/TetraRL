@@ -52,6 +52,8 @@ references/**/wandb/
 references/**/runs/
 
 # Results (keep tracked validation artifacts)
-results/
+results/*
 !results/week1_orin_validation/
+results/week1_orin_validation/*
 !results/week1_orin_validation/progress.json
+!results/week1_orin_validation/eval_results.json
