@@ -42,3 +42,11 @@ tegrastats_*.csv
 # Misc
 *.bak
 *.tmp
+
+# References (third-party reference codebases — vendored)
+references/**/datasets/
+references/**/checkpoints/
+references/**/*.pth
+references/**/*.pt
+references/**/wandb/
+references/**/runs/
