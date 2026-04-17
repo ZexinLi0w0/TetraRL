@@ -6,6 +6,8 @@ requires 200k frames. See scripts/train_pd_morl_dst.py for the full
 reproduction.
 """
 
+import random
+
 import numpy as np
 import pytest
 
@@ -128,6 +130,7 @@ class TestPDMORLIntegration:
         assert len(agent.buffer) > 0
 
     def test_loss_decreases(self, setup):
+        random.seed(1)
         env, agent = setup
         rng = np.random.default_rng(1)
         losses = []
