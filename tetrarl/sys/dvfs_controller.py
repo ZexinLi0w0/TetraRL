@@ -10,7 +10,7 @@ occur only every N training steps to amortize transition overhead.
 #       Nano; measure per-pair transition latencies; implement
 #       super-block granularity with configurable N.
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

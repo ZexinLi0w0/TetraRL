@@ -1,5 +1,12 @@
 # TetraRL: A Multi-Objective Runtime System for On-Device Reinforcement Learning Training
 
+
+[![CI](https://github.com/ZexinLi0w0/TetraRL/actions/workflows/ci.yml/badge.svg)](https://github.com/ZexinLi0w0/TetraRL/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0%2B-orange.svg)](https://pytorch.org/)
+[![Status](https://img.shields.io/badge/status-Week%200%20%E2%80%94%20skeleton-lightgrey.svg)](docs/action-plan-weekly.md)
+
 **Built around the R⁴ principle: Real-time × Reward × RAM × Recharge**
 
 <!-- Badges -->
