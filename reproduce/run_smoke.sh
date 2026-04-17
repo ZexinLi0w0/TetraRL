@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-OUT_DIR="/experiment/zexin/TetraRL/reproduce/runs/smoke_${TIMESTAMP}"
+OUT_DIR="${PROJECT_ROOT}/reproduce/runs/smoke_${TIMESTAMP}"
 
 echo "=== TetraRL Smoke Test ==="
 echo "Output directory: ${OUT_DIR}"
@@ -19,15 +19,21 @@ pytest tests/ -v --tb=short 2>&1 | tee "${OUT_DIR}/pytest.log"
 echo "[2/3] Verifying imports..."
 python -c "
 import tetrarl
-from tetrarl.morl import pd_morl, operators
-from tetrarl.sys import tegrastats_daemon, dvfs_controller, override_layer
+from tetrarl.morl.agents import pd_morl
+from tetrarl.morl import operators, preference_sampling
+from tetrarl.envs.dst import DeepSeaTreasure
 from tetrarl.eval import hypervolume, tail_latency
+from tetrarl.sys import tegrastats_daemon, dvfs_controller, override_layer
 print('All imports OK')
 " 2>&1 | tee "${OUT_DIR}/imports.log"
 
-# Step 3: CartPole DST sanity (placeholder)
-echo "[3/3] CartPole DST sanity check..."
-echo "TODO: Run MO-DQN-HER on CartPole DST for 20k steps (Week 1)" | tee "${OUT_DIR}/cartpole.log"
+# Step 3: PD-MORL DST short training (1000 frames)
+echo "[3/3] PD-MORL DST sanity check (1000 frames)..."
+python scripts/train_pd_morl_dst.py \
+    --frames 1000 \
+    --seed 0 \
+    --logdir "${OUT_DIR}/pd_morl_dst" \
+    2>&1 | tee "${OUT_DIR}/train.log"
 
 echo "=== Smoke test complete ==="
 echo "Logs: ${OUT_DIR}"
