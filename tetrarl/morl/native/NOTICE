@@ -1,0 +1,27 @@
+This directory contains code derived from:
+
+    cleanrl — Clean Implementation of RL Algorithms
+    https://github.com/vwxyzjn/cleanrl
+    Copyright (c) 2019 Costa Huang
+    License: MIT (https://github.com/vwxyzjn/cleanrl/blob/master/LICENSE)
+
+    ppo_base.py is vendored from cleanrl/cleanrl/ppo_continuous_action.py
+    as a reference implementation. preference_ppo.py and agent.py build
+    upon cleanrl's PPO architecture with modifications for multi-objective
+    preference conditioning.
+
+    Citation:
+    @article{huang2022cleanrl,
+        author  = {Shengyi Huang and Rousslan Fernand Julien Dossa
+                   and Chang Ye and Jeff Brber and Daniel Morimoto
+                   and Jos{\'e} Gabriel Reis Paiva and Marley Vellasco
+                   and Filipe Mutz},
+        title   = {CleanRL: High-quality Single-file Implementations
+                   of Deep Reinforcement Learning Algorithms},
+        journal = {Journal of Machine Learning Research},
+        year    = {2022},
+        volume  = {23},
+        number  = {274},
+        pages   = {1--18},
+        url     = {http://jmlr.org/papers/v23/21-1342.html}
+    }
