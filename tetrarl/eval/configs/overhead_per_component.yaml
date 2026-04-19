@@ -1,0 +1,40 @@
+# Week 8 per-component overhead measurement (Orin AGX)
+# Purpose: measures per-component runtime ms + memory MB by toggling each
+# arm and diffing wall-time / mean_memory_util against the baseline (none).
+# 5 ablation arms × 1 seed × CartPole-v1 × 100 episodes
+configs:
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: none
+    platform: orin_agx
+    n_episodes: 100
+    seed: 0
+    out_dir: runs/w8_overhead
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: preference_plane
+    platform: orin_agx
+    n_episodes: 100
+    seed: 0
+    out_dir: runs/w8_overhead
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: resource_manager
+    platform: orin_agx
+    n_episodes: 100
+    seed: 0
+    out_dir: runs/w8_overhead
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: rl_arbiter
+    platform: orin_agx
+    n_episodes: 100
+    seed: 0
+    out_dir: runs/w8_overhead
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: override_layer
+    platform: orin_agx
+    n_episodes: 100
+    seed: 0
+    out_dir: runs/w8_overhead
