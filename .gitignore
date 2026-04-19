@@ -26,7 +26,12 @@ venv/
 *~
 
 # Training artifacts
-runs/
+runs/*
+# Whitelist Week 7 Nano deliverables (tracked validation artifacts for paper)
+!runs/w7_nano_cartpole/
+!runs/w7_nano_cartpole/**
+!runs/w7_ffmpeg_nano/
+!runs/w7_ffmpeg_nano/**
 checkpoints/
 *.pth
 *.h5
