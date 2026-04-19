@@ -1,0 +1,25 @@
+# Week 9 Task C - DVFS-DRL-Multitask baseline on Orin Nano (4-D DAG)
+# Soft-deadline reward shaping (Algorithm 3 from DVFS-DRL-Multitask 2024).
+# Run: python -m tetrarl.eval.runner --config tetrarl/eval/configs/dvfs_drl_multitask_nano.yaml
+configs:
+  - env_name: CartPole-v1
+    agent_type: dvfs_drl_multitask
+    ablation: none
+    platform: orin_nano
+    n_episodes: 200
+    seed: 0
+    out_dir: runs/w9_dvfs_drl_nano
+  - env_name: CartPole-v1
+    agent_type: dvfs_drl_multitask
+    ablation: none
+    platform: orin_nano
+    n_episodes: 200
+    seed: 1
+    out_dir: runs/w9_dvfs_drl_nano
+  - env_name: CartPole-v1
+    agent_type: dvfs_drl_multitask
+    ablation: none
+    platform: orin_nano
+    n_episodes: 200
+    seed: 2
+    out_dir: runs/w9_dvfs_drl_nano
