@@ -14,6 +14,19 @@ Per-step dataflow inside step():
     action = fallback if fired else proposed
     dvfs_idx = resource_manager.decide_dvfs(hw, n_levels) if dvfs_controller else None
 
+When ``concurrent_decision`` is provided (Week 7 / DVFO Zhang TMC 2023),
+the DVFS decision computation is moved to a background thread and the
+per-step body becomes:
+
+    apply_latest()  # use the decision computed during step t-1
+    submit(hw)      # kick off the decision for step t+1 in background
+    arbiter.act()   # foreground forward pass overlaps with the worker
+
+The concurrent path takes precedence over the in-loop ResourceManager +
+DVFSController calls; passing both is fine — the in-loop path is simply
+skipped. When ``concurrent_decision`` is ``None`` (default), behaviour
+is identical to the pre-Week-7 sequential pipeline (BACKWARD COMPATIBLE).
+
 The framework treats each component as a black box; we do not retrain
 or re-derive anything here. Records (one dict per step) are appended to
 self.history and exposed for offline analysis.
@@ -77,6 +90,7 @@ class TetraRLFramework:
         telemetry_source: Any,
         telemetry_adapter: Callable[[Any], HardwareTelemetry],
         dvfs_controller: Any = None,
+        concurrent_decision: Optional[Any] = None,
     ):
         self.preference_plane = preference_plane
         self.rl_arbiter = rl_arbiter
@@ -85,17 +99,30 @@ class TetraRLFramework:
         self.telemetry_source = telemetry_source
         self.telemetry_adapter = telemetry_adapter
         self.dvfs_controller = dvfs_controller
+        self.concurrent_decision = concurrent_decision
         self.history: list[dict] = []
 
     def step(self, state) -> dict:
         omega = self.preference_plane.get()
         hw = self.telemetry_adapter(self.telemetry_source.latest())
+
+        dvfs_idx: Optional[int] = None
+        concurrent_dvfs_used = False
+        if self.concurrent_decision is not None:
+            # Apply the decision computed during the PREVIOUS step's
+            # background work (lag-by-1 per DVFO; on step 0 returns None
+            # or the configured fallback without crashing).
+            dvfs_idx = self.concurrent_decision.apply_latest()
+            # Kick off the NEXT decision; the worker computes it while the
+            # arbiter forward pass below runs on the GIL-bound foreground.
+            self.concurrent_decision.submit(hw)
+            concurrent_dvfs_used = True
+
         proposed = self.rl_arbiter.act(state, omega)
         override_fired, fallback = self.override_layer.step(hw)
         action = fallback if override_fired else proposed
 
-        dvfs_idx: Optional[int] = None
-        if self.dvfs_controller is not None:
+        if self.concurrent_decision is None and self.dvfs_controller is not None:
             n_levels = len(self.dvfs_controller.available_frequencies()["gpu"])
             dvfs_idx = self.resource_manager.decide_dvfs(hw, n_levels=n_levels)
             self.dvfs_controller.set_freq(gpu_idx=dvfs_idx)
@@ -110,6 +137,7 @@ class TetraRLFramework:
             "energy_j": hw.energy_remaining_j,
             "memory_util": hw.memory_util,
             "dvfs_idx": dvfs_idx,
+            "concurrent_dvfs_used": concurrent_dvfs_used,
         }
         self.history.append(record)
         return record

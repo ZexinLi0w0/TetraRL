@@ -246,3 +246,212 @@ def test_latest_reflects_freshest_decision_after_settling():
         assert loop.latest() == 9
     finally:
         loop.shutdown()
+
+
+# ---------------------------------------------------------------------------
+# Framework integration tests (require new framework arg `concurrent_decision`)
+# ---------------------------------------------------------------------------
+
+import numpy as np  # noqa: E402
+
+from tetrarl.core.framework import (  # noqa: E402
+    ResourceManager,
+    StaticPreferencePlane,
+    TetraRLFramework,
+)
+from tetrarl.morl.native.override import (  # noqa: E402
+    OverrideLayer,
+    OverrideThresholds,
+)
+
+
+class _ConstTelemetry:
+    """latest() always returns the same HardwareTelemetry."""
+
+    def __init__(self, hw: HardwareTelemetry):
+        self._hw = hw
+
+    def latest(self) -> HardwareTelemetry:
+        return self._hw
+
+
+class _FixedArbiter:
+    """Returns a fixed action; records calls."""
+
+    def __init__(self, action: int = 1):
+        self.action = int(action)
+        self.calls: list = []
+
+    def act(self, state, omega):
+        self.calls.append((np.asarray(state).copy(), np.asarray(omega).copy()))
+        return self.action
+
+
+def _telem_passthrough(hw: HardwareTelemetry) -> HardwareTelemetry:
+    return hw
+
+
+def _make_sequential_framework(arbiter, telemetry, dvfs):
+    pref = StaticPreferencePlane(np.array([0.5, 0.5], dtype=np.float32))
+    rm = ResourceManager()
+    override = OverrideLayer(
+        OverrideThresholds(max_latency_ms=10000.0, min_energy_j=0.5,
+                           max_memory_util=0.95),
+        fallback_action=0,
+    )
+    return TetraRLFramework(
+        preference_plane=pref,
+        rl_arbiter=arbiter,
+        resource_manager=rm,
+        override_layer=override,
+        telemetry_source=telemetry,
+        telemetry_adapter=_telem_passthrough,
+        dvfs_controller=dvfs,
+    )
+
+
+def _make_concurrent_framework(arbiter, telemetry, dvfs, loop):
+    pref = StaticPreferencePlane(np.array([0.5, 0.5], dtype=np.float32))
+    rm = ResourceManager()
+    override = OverrideLayer(
+        OverrideThresholds(max_latency_ms=10000.0, min_energy_j=0.5,
+                           max_memory_util=0.95),
+        fallback_action=0,
+    )
+    return TetraRLFramework(
+        preference_plane=pref,
+        rl_arbiter=arbiter,
+        resource_manager=rm,
+        override_layer=override,
+        telemetry_source=telemetry,
+        telemetry_adapter=_telem_passthrough,
+        dvfs_controller=dvfs,
+        concurrent_decision=loop,
+    )
+
+
+def test_framework_records_concurrent_dvfs_used_flag_false_when_unset():
+    """Backward compat: without the concurrent loop, the flag is False."""
+    hw = _hw(latency=1.0, energy=100.0, mem=0.1)
+    seq_fw = _make_sequential_framework(
+        _FixedArbiter(action=1), _ConstTelemetry(hw), _StubDVFSController()
+    )
+    record = seq_fw.step(np.zeros(4, dtype=np.float32))
+    assert record["concurrent_dvfs_used"] is False
+
+
+def test_framework_first_step_with_concurrent_loop_does_not_crash():
+    """At step 0, no decision exists yet; framework returns dvfs_idx=None safely."""
+    hw = _hw(latency=1.0, energy=100.0, mem=0.1)
+    rm = ResourceManager()
+    dvfs = _StubDVFSController()
+    loop = ConcurrentDecisionLoop(
+        resource_manager=rm, dvfs_controller=dvfs, n_levels=14, fallback_idx=-1
+    )
+    try:
+        fw = _make_concurrent_framework(
+            _FixedArbiter(action=1), _ConstTelemetry(hw), dvfs, loop
+        )
+        record = fw.step(np.zeros(4, dtype=np.float32))
+        assert record["action"] == 1
+        assert record["concurrent_dvfs_used"] is True
+        # No decision yet: dvfs_idx is None (no fallback configured).
+        assert record["dvfs_idx"] is None
+    finally:
+        loop.shutdown()
+
+
+def test_framework_concurrent_action_stream_matches_sequential_under_constant_telemetry():
+    """With constant telemetry, the action stream must match step-for-step.
+
+    The DVFS index is allowed to lag by 1 step on the concurrent path: at
+    step 0 the concurrent record has dvfs_idx=None (no fallback set), and
+    from step 1 onward it must match the sequential decision (which is
+    constant when telemetry is constant).
+    """
+    hw = _hw(latency=1.0, energy=100.0, mem=0.1)
+
+    seq_dvfs = _StubDVFSController()
+    seq_fw = _make_sequential_framework(
+        _FixedArbiter(action=1), _ConstTelemetry(hw), seq_dvfs
+    )
+    seq_records = [seq_fw.step(np.zeros(4, dtype=np.float32)) for _ in range(5)]
+
+    conc_dvfs = _StubDVFSController()
+    rm = ResourceManager()
+    loop = ConcurrentDecisionLoop(
+        resource_manager=rm, dvfs_controller=conc_dvfs, n_levels=14, fallback_idx=-1
+    )
+    try:
+        conc_fw = _make_concurrent_framework(
+            _FixedArbiter(action=1), _ConstTelemetry(hw), conc_dvfs, loop
+        )
+        conc_records: list = []
+        for _ in range(5):
+            conc_records.append(conc_fw.step(np.zeros(4, dtype=np.float32)))
+            time.sleep(0.08)  # let the background worker drain the latest submit
+    finally:
+        loop.shutdown()
+
+    # Action stream identical (deterministic arbiter + constant telemetry).
+    for s, c in zip(seq_records, conc_records):
+        assert s["action"] == c["action"], "action stream diverged"
+        assert s["override_fired"] == c["override_fired"]
+
+    # DVFS lag-by-one: concurrent step 0 is None, step >= 1 matches sequential.
+    assert conc_records[0]["dvfs_idx"] is None
+    seq_dvfs_idx = seq_records[0]["dvfs_idx"]  # constant under constant telemetry
+    assert all(rec["dvfs_idx"] == seq_dvfs_idx for rec in seq_records)
+    assert all(rec["dvfs_idx"] == seq_dvfs_idx for rec in conc_records[1:])
+
+    # New flag set correctly on each path.
+    assert all(r["concurrent_dvfs_used"] is False for r in seq_records)
+    assert all(r["concurrent_dvfs_used"] is True for r in conc_records)
+
+
+def test_framework_concurrent_per_step_time_not_egregiously_higher():
+    """Concurrent per-step time must not be wildly higher than sequential.
+
+    On Mac with stub DVFS, the decide_dvfs body is essentially free, so
+    threading overhead can dominate. We allow up to 5x slack in this unit
+    test (the smoke script enforces the tighter +10% bound over a longer
+    run with real env dynamics).
+    """
+    hw = _hw(latency=1.0, energy=100.0, mem=0.1)
+    n_steps = 200
+
+    seq_dvfs = _StubDVFSController()
+    seq_fw = _make_sequential_framework(
+        _FixedArbiter(action=1), _ConstTelemetry(hw), seq_dvfs
+    )
+    t0 = time.perf_counter()
+    for _ in range(n_steps):
+        seq_fw.step(np.zeros(4, dtype=np.float32))
+    seq_total = time.perf_counter() - t0
+    seq_mean = seq_total / n_steps
+
+    conc_dvfs = _StubDVFSController()
+    rm = ResourceManager()
+    loop = ConcurrentDecisionLoop(
+        resource_manager=rm, dvfs_controller=conc_dvfs, n_levels=14, fallback_idx=0
+    )
+    try:
+        conc_fw = _make_concurrent_framework(
+            _FixedArbiter(action=1), _ConstTelemetry(hw), conc_dvfs, loop
+        )
+        t0 = time.perf_counter()
+        for _ in range(n_steps):
+            conc_fw.step(np.zeros(4, dtype=np.float32))
+        conc_total = time.perf_counter() - t0
+        conc_mean = conc_total / n_steps
+    finally:
+        loop.shutdown()
+
+    # Sanity: both well under 50 ms/step on any modern laptop.
+    assert seq_mean < 0.05, f"sequential too slow: {seq_mean*1000:.3f} ms/step"
+    assert conc_mean < 0.05, f"concurrent too slow: {conc_mean*1000:.3f} ms/step"
+    # Allow concurrent up to 5x sequential mean (timing is noisy on Mac).
+    assert conc_mean <= max(seq_mean * 5.0, 0.001), (
+        f"concurrent regression: seq={seq_mean*1000:.3f} ms, "
+        f"conc={conc_mean*1000:.3f} ms"
+    )
