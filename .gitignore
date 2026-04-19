@@ -38,6 +38,8 @@ runs/*
 !runs/w8_overhead_nano_notrace/**
 !runs/w8_ablation_orin/
 !runs/w8_ablation_orin/**
+!runs/w8_ablation_orin_real/
+!runs/w8_ablation_orin_real/**
 !runs/w7_combined_cdf.png
 !runs/w7_combined_cdf.svg
 !runs/w7_pareto_4d_mac/
