@@ -143,3 +143,24 @@ def test_emitted_yaml_is_consumable_by_runner(tmp_path: Path):
         assert c.n_episodes > 0
         assert isinstance(c.seed, int)
         assert "omega" in c.extra
+
+
+def test_matrix_entries_carry_jsonl_name_with_omega_idx_suffix(tmp_path: Path):
+    """Each entry's extra['jsonl_name'] must include __o<idx> so the
+    runner writes 5 distinct files per (agent, seed) instead of
+    overwriting on the canonical name."""
+    out_yaml = tmp_path / "w10.yaml"
+    res = _run([
+        "--out", str(out_yaml),
+        "--envs", "dag_scheduler_mo-v0",
+        "--agents", "preference_ppo",
+        "--seeds", "0",
+    ])
+    assert res.returncode == 0, res.stderr
+    cfgs = load_sweep_yaml(out_yaml)
+    names = {c.extra.get("jsonl_name") for c in cfgs}
+    assert len(names) == 5
+    for n in names:
+        assert n is not None
+        assert "__o" in n
+        assert n.endswith(".jsonl")

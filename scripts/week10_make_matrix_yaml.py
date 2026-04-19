@@ -73,8 +73,11 @@ def build_matrix_configs(
     cfgs: list[EvalConfig] = []
     for agent in agents:
         for env in envs:
-            for omega in OMEGAS_4D:
+            for omega_idx, omega in enumerate(OMEGAS_4D):
                 for seed in seeds:
+                    jsonl_name = (
+                        f"{ablation}__{agent}__seed{int(seed)}__o{omega_idx}.jsonl"
+                    )
                     cfg = EvalConfig(
                         env_name=env,
                         agent_type=agent,
@@ -83,7 +86,11 @@ def build_matrix_configs(
                         n_episodes=int(n_episodes),
                         seed=int(seed),
                         out_dir=out_dir,
-                        extra={"omega": [float(x) for x in omega]},
+                        extra={
+                            "omega": [float(x) for x in omega],
+                            "omega_idx": int(omega_idx),
+                            "jsonl_name": jsonl_name,
+                        },
                     )
                     cfgs.append(cfg)
     return cfgs

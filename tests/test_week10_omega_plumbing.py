@@ -71,3 +71,25 @@ def test_runner_records_per_run_omega_in_jsonl(tmp_path: Path):
     first = json.loads(jsonl.read_text().splitlines()[0])
     assert len(first["omega"]) == 4
     np.testing.assert_allclose(first["omega"], omega_4d)
+
+
+def test_runner_honours_extra_jsonl_name(tmp_path: Path):
+    """When cfg.extra['jsonl_name'] is provided, the runner must write to
+    that filename (not the canonical <ablation>__<agent>__seedN.jsonl).
+    Required for the W10 matrix where 5 ω vectors share one (agent, seed)
+    group and would otherwise overwrite each other."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=1,
+        seed=0,
+        out_dir=tmp_path,
+        extra={"omega": [1.0, 0.0, 0.0, 0.0],
+               "jsonl_name": "none__random__seed0__o0.jsonl"},
+    )
+    runner = EvalRunner()
+    runner.run(cfg)
+    assert (tmp_path / "none__random__seed0__o0.jsonl").exists()
+    assert not (tmp_path / "none__random__seed0.jsonl").exists()
