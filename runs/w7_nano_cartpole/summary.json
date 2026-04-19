@@ -1,0 +1,17 @@
+{
+  "platform": "nano",
+  "n_episodes": 200,
+  "memory_pressure_mb": 1500,
+  "with_override": true,
+  "use_real_dvfs": true,
+  "use_real_tegrastats": true,
+  "max_memory_util_threshold": 0.2,
+  "total_steps": 1965,
+  "override_fire_count": 1826,
+  "oom_events": 0,
+  "mean_episode_return": 9.825,
+  "mean_framework_step_ms": 0.036483761882907105,
+  "max_framework_step_ms": 0.1233280636370182,
+  "deferred_dvfs_reason": "real-DVFS unavailable (FileNotFoundError: [Errno 2] No such file or directory: '/sys/devices/57000000.gpu/devfreq/57000000.gpu/available_frequencies'); falling back to stub mode. The platform sysfs paths in tetrarl/sys/platforms.py likely need adjustment for this board variant. Documented as deferred follow-up.",
+  "trace_path": "runs/w7_nano_cartpole/trace.jsonl"
+}
