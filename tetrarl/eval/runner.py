@@ -457,6 +457,14 @@ class EvalRunner:
         and emits one JSONL line per ``(env_id, episode, step)`` tuple.
         """
         import gymnasium as gym  # lazy: keeps test collection cheap
+        import tetrarl.envs  # noqa: F401  side-effect: registers dag_scheduler_mo-v0
+        # Re-trigger registration in case the gymnasium registry was cleared
+        # after tetrarl.envs was first imported (e.g. by a fresh-process test
+        # harness). The _register module body is idempotent.
+        import importlib
+        from tetrarl.envs import _register as _envs_register
+        if "dag_scheduler_mo-v0" not in gym.envs.registration.registry:
+            importlib.reload(_envs_register)
 
         # Reset RNGs INSIDE run() so two separate EvalRunner instances
         # produce identical reward sequences for the same seed.
@@ -593,6 +601,14 @@ class EvalRunner:
         reports ``cfg.n_envs * cfg.n_episodes``.
         """
         import gymnasium as gym  # lazy: keeps test collection cheap
+        import tetrarl.envs  # noqa: F401  side-effect: registers dag_scheduler_mo-v0
+        # Re-trigger registration in case the gymnasium registry was cleared
+        # after tetrarl.envs was first imported. The _register module is
+        # idempotent.
+        import importlib
+        from tetrarl.envs import _register as _envs_register
+        if "dag_scheduler_mo-v0" not in gym.envs.registration.registry:
+            importlib.reload(_envs_register)
 
         n_envs = int(cfg.n_envs)
         n_episodes_per_env = int(cfg.n_episodes)
