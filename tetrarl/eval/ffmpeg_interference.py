@@ -24,10 +24,40 @@ from __future__ import annotations
 
 import json
 import statistics  # noqa: F401  -- kept for downstream extensions
+import subprocess
 import time
-from typing import Iterable, Sequence
+from typing import Iterable, Literal, Optional, Sequence
 
 # stdlib only per spec; numpy is intentionally avoided.
+
+ResolutionLiteral = Literal["720p", "1080p", "2K", "none"]
+
+_RESOLUTION_TO_WH: dict[str, tuple[int, int]] = {
+    "720p": (1280, 720),
+    "1080p": (1920, 1080),
+    "2K": (2560, 1440),
+}
+
+# Codec names we treat as "hardware H.264 decode is available" on Orin.
+_HW_DECODE_HINTS: tuple[str, ...] = ("nvv4l2dec", "nvdec", "cuda")
+
+
+def ffmpeg_available() -> bool:
+    """Return True iff the ``ffmpeg`` binary is on PATH and runs.
+
+    Used by tests and the CLI driver to gracefully skip work when the
+    binary is missing (e.g., minimal CI containers).
+    """
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5.0,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0
 
 
 class LatencyRecorder:
@@ -102,3 +132,154 @@ class LatencyRecorder:
         with open(path, "w", encoding="utf-8") as f:
             for idx, sample in enumerate(self._samples_ms):
                 f.write(json.dumps({"sample_ms": float(sample), "idx": int(idx)}) + "\n")
+
+
+class FFmpegInterference:
+    """Context manager spawning an ``ffmpeg`` co-runner subprocess.
+
+    The lifecycle is::
+
+        with FFmpegInterference(resolution="720p") as ff:
+            ...   # workload runs here, ff.process is alive
+        # __exit__ has SIGTERMed and reaped the subprocess.
+
+    With ``resolution="none"`` no subprocess is spawned (for the baseline
+    condition). The ``__exit__`` path uses ``terminate -> wait(5) -> kill``
+    so it is safe under ``KeyboardInterrupt`` and exception unwinding —
+    Python's ``with`` statement guarantees ``__exit__`` runs in both cases.
+    """
+
+    def __init__(
+        self,
+        resolution: ResolutionLiteral,
+        video_path: Optional[str] = None,
+        hw_decode: bool = False,
+    ) -> None:
+        self.resolution = resolution
+        self.video_path = video_path
+        self.hw_decode = bool(hw_decode)
+        self._process: Optional[subprocess.Popen] = None
+        # Cached argv for diagnostic / test inspection.
+        self._argv: Optional[list[str]] = None
+
+    @staticmethod
+    def _resolution_to_wh(res: str) -> tuple[int, int]:
+        if res not in _RESOLUTION_TO_WH:
+            raise ValueError(
+                f"unknown resolution {res!r}; expected one of {list(_RESOLUTION_TO_WH)}"
+            )
+        return _RESOLUTION_TO_WH[res]
+
+    @staticmethod
+    def _hw_decode_available() -> bool:
+        """Probe ``ffmpeg -hwaccels`` for an Orin-class H.264 hw decoder.
+
+        On Mac this returns False (only ``videotoolbox`` is listed). On
+        Orin with a JetPack ffmpeg build, ``nvv4l2dec`` (or ``nvdec`` /
+        ``cuda``) appears in the output.
+        """
+        try:
+            proc = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-hwaccels"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=5.0,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+        if proc.returncode != 0:
+            return False
+        text = proc.stdout.decode("utf-8", errors="replace").lower()
+        return any(hint in text for hint in _HW_DECODE_HINTS)
+
+    @staticmethod
+    def build_argv(
+        resolution: str,
+        video_path: Optional[str],
+        hw_decode: bool,
+    ) -> list[str]:
+        """Return the ffmpeg argv list for the given condition.
+
+        Exposed as a static method so tests can assert on the argv
+        without spawning a real subprocess.
+        """
+        if resolution == "none":
+            raise ValueError("build_argv should not be called with resolution='none'")
+        w, h = FFmpegInterference._resolution_to_wh(resolution)
+
+        argv: list[str] = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
+
+        # Only the real-video path can use the hw decoder; lavfi testsrc
+        # generates raw frames, so an h264 decoder slot is meaningless.
+        use_hw = (
+            hw_decode
+            and video_path is not None
+            and FFmpegInterference._hw_decode_available()
+        )
+        if use_hw:
+            argv += ["-c:v", "h264_nvv4l2dec"]
+
+        if video_path is not None:
+            # Loop the input forever so the co-runner outlives the workload.
+            argv += ["-stream_loop", "-1", "-i", str(video_path)]
+        else:
+            # Synthetic source — no external file dependency.
+            argv += [
+                "-f",
+                "lavfi",
+                "-i",
+                f"testsrc=size={w}x{h}:rate=30",
+            ]
+
+        # Discard decoded output; we only care about the CPU/GPU load.
+        argv += ["-f", "null", "-"]
+        return argv
+
+    @property
+    def process(self) -> Optional[subprocess.Popen]:
+        return self._process
+
+    @property
+    def argv(self) -> Optional[list[str]]:
+        return list(self._argv) if self._argv is not None else None
+
+    def __enter__(self) -> "FFmpegInterference":
+        if self.resolution == "none":
+            # No-op baseline.
+            self._process = None
+            self._argv = None
+            return self
+        self._argv = self.build_argv(
+            resolution=self.resolution,
+            video_path=self.video_path,
+            hw_decode=self.hw_decode,
+        )
+        # stdout/stderr to DEVNULL so the co-runner can't pollute the host
+        # terminal or saturate a pipe buffer.
+        self._process = subprocess.Popen(
+            self._argv,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        proc = self._process
+        if proc is None:
+            return
+        try:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    # Final wait so we don't leave a zombie behind.
+                    try:
+                        proc.wait(timeout=5.0)
+                    except subprocess.TimeoutExpired:
+                        # Best effort — log and move on rather than hang.
+                        pass
+        finally:
+            self._process = None

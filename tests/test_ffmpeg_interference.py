@@ -70,3 +70,109 @@ def test_latency_recorder_uses_perf_counter():
         assert s >= 0.0
     # At least one sample should be positive (we spun for 50us).
     assert any(s > 0.0 for s in samples)
+
+
+# ----------------------- Cycle 2: FFmpegInterference -----------------------
+
+
+def test_ffmpeg_available_returns_bool():
+    from tetrarl.eval.ffmpeg_interference import ffmpeg_available
+
+    val = ffmpeg_available()
+    assert isinstance(val, bool)
+
+
+def test_resolution_to_wh_mapping():
+    from tetrarl.eval.ffmpeg_interference import FFmpegInterference
+
+    assert FFmpegInterference._resolution_to_wh("720p") == (1280, 720)
+    assert FFmpegInterference._resolution_to_wh("1080p") == (1920, 1080)
+    assert FFmpegInterference._resolution_to_wh("2K") == (2560, 1440)
+
+
+def test_none_condition_is_noop():
+    """resolution='none' must not spawn a subprocess."""
+    from tetrarl.eval.ffmpeg_interference import FFmpegInterference
+
+    with FFmpegInterference(resolution="none") as ff:
+        assert ff.process is None
+
+
+def test_synthetic_testsrc_argv_when_no_video_path():
+    """If video_path is None we must use ``-f lavfi`` testsrc source."""
+    from tetrarl.eval.ffmpeg_interference import FFmpegInterference
+
+    argv = FFmpegInterference.build_argv(
+        resolution="720p", video_path=None, hw_decode=False
+    )
+    # The argv list should contain a -f flag followed by 'lavfi' and a -i
+    # flag whose value starts with 'testsrc='.
+    assert "-f" in argv
+    f_idx = argv.index("-f")
+    assert argv[f_idx + 1] == "lavfi"
+    assert "-i" in argv
+    i_idx = argv.index("-i")
+    assert argv[i_idx + 1].startswith("testsrc=")
+    # Resolution propagated as 1280x720, framerate 30.
+    assert "size=1280x720" in argv[i_idx + 1]
+    assert "rate=30" in argv[i_idx + 1]
+    # Output discarded via -f null -.
+    assert argv[-2:] == ["-f", "null"] or argv[-2:] == ["null", "-"] or argv[-3:] == ["-f", "null", "-"]
+
+
+def test_video_path_argv_uses_stream_loop():
+    """If video_path is given, argv must include ``-stream_loop -1`` + path."""
+    from tetrarl.eval.ffmpeg_interference import FFmpegInterference
+
+    argv = FFmpegInterference.build_argv(
+        resolution="1080p", video_path="/tmp/foo.h264", hw_decode=False
+    )
+    assert "-stream_loop" in argv
+    sl_idx = argv.index("-stream_loop")
+    assert argv[sl_idx + 1] == "-1"
+    assert "/tmp/foo.h264" in argv
+
+
+def test_hw_decode_suppressed_when_unavailable(monkeypatch):
+    """hw_decode=True with no nvv4l2dec available must NOT add -c:v flag."""
+    from tetrarl.eval import ffmpeg_interference as ffi
+
+    monkeypatch.setattr(ffi.FFmpegInterference, "_hw_decode_available", staticmethod(lambda: False))
+    argv = ffi.FFmpegInterference.build_argv(
+        resolution="1080p", video_path="/tmp/foo.h264", hw_decode=True
+    )
+    assert "h264_nvv4l2dec" not in argv
+
+
+def test_hw_decode_added_when_available(monkeypatch):
+    """hw_decode=True with nvv4l2dec available must add ``-c:v h264_nvv4l2dec`` before -i."""
+    from tetrarl.eval import ffmpeg_interference as ffi
+
+    monkeypatch.setattr(ffi.FFmpegInterference, "_hw_decode_available", staticmethod(lambda: True))
+    argv = ffi.FFmpegInterference.build_argv(
+        resolution="1080p", video_path="/tmp/foo.h264", hw_decode=True
+    )
+    assert "h264_nvv4l2dec" in argv
+    cv_idx = argv.index("-c:v")
+    i_idx = argv.index("-i")
+    assert cv_idx < i_idx
+    assert argv[cv_idx + 1] == "h264_nvv4l2dec"
+
+
+def test_context_manager_spawns_and_reaps():
+    """End-to-end: spawn ffmpeg with testsrc, verify it is reaped on exit."""
+    from tetrarl.eval.ffmpeg_interference import FFmpegInterference, ffmpeg_available
+
+    if not ffmpeg_available():
+        pytest.skip("ffmpeg not on PATH")
+
+    with FFmpegInterference(resolution="720p") as ff:
+        assert ff.process is not None
+        # Subprocess should be alive immediately after __enter__.
+        assert ff.process.poll() is None
+        proc = ff.process
+        # Hold the reference so we can poll it after exit.
+
+    # On exit, the subprocess must be reaped (terminated and waited on).
+    # poll() returning a non-None code means the process finished.
+    assert proc.poll() is not None
