@@ -11,6 +11,17 @@ Frequency table sources:
   of the 29/11 actually exposed on a measured unit).
 - Jetson Nano (4 GB): NVIDIA L4T 32.7 docs — 15 CPU points
   (102000..1479000 kHz) + 12 GPU points (76.8..921.6 MHz).
+- Orin Nano (8 GB): probed live on `nano2` running L4T R35.4.1
+  (Tegra T234 family). 6 Cortex-A78AE cores split across two cpufreq
+  policies (policy0 = cpu0-3, policy4 = cpu4-5); 20 cpufreq points
+  (115_200..1_510_400 kHz). The GPU is an Ampere ga10b at
+  ``/sys/class/devfreq/17000000.ga10b/`` with 5 devfreq points
+  (306..624.75 MHz). MemTotal ~7.65 GB physical → 8192 MB profile.
+  Unlike Orin AGX, the ga10b devfreq exposes governor + min_freq +
+  max_freq directly (there is no ``userspace/set_freq`` subdirectory),
+  so the synthetic ``gpu_setspeed_path`` recorded here is never
+  written to — only its derived ``available``/``min``/``max``/``cur``
+  siblings are touched by ``DVFSController.set_freq``.
 
 Unit convention: cpu_freqs_hz stores cpufreq's kHz integers (matches
 the value written to scaling_setspeed); gpu_freqs_hz stores raw Hz.
@@ -27,6 +38,7 @@ from typing import Literal, Union
 class Platform(str, Enum):
     ORIN_AGX = "orin_agx"
     NANO = "nano"
+    ORIN_NANO = "orin_nano"
 
 
 @dataclass(frozen=True)
@@ -81,9 +93,36 @@ _NANO_PROFILE = PlatformProfile(
 )
 
 
+# Orin Nano (8 GB) — probed live on `nano2` (L4T R35.4.1, Tegra T234).
+# CPU: 20 cpufreq points covering both policies (policy0 = cpu0-3,
+# policy4 = cpu4-5); both policies expose the same scaling table.
+# GPU: 5 ga10b devfreq points. The ``userspace/set_freq`` suffix in
+# ``gpu_setspeed_path`` is synthetic — the device exposes only
+# governor + min_freq/max_freq under the devfreq dir, but the existing
+# ``_default_gpu_paths`` derivation strips that suffix to find the real
+# ``available``/``min``/``max``/``cur`` siblings, which DO exist.
+_ORIN_NANO_PROFILE = PlatformProfile(
+    name="Jetson Orin Nano (8 GB)",
+    cpu_freqs_hz=[
+        115200, 192000, 268800, 345600, 422400, 499200, 576000, 652800,
+        729600, 806400, 883200, 960000, 1036800, 1113600, 1190400, 1267200,
+        1344000, 1420800, 1497600, 1510400,
+    ],
+    gpu_freqs_hz=[
+        306000000, 408000000, 510000000, 612000000, 624750000,
+    ],
+    cpu_setspeed_path_template="/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_setspeed",
+    gpu_setspeed_path="/sys/class/devfreq/17000000.ga10b/userspace/set_freq",
+    tegrastats_field_layout="orin",  # Tegra T234 shares AGX Orin tegrastats schema.
+    default_ema_alpha=0.1,  # Same chip family as Orin AGX -> same noise profile.
+    mem_total_mb=8192,
+)
+
+
 PLATFORM_PROFILES: dict[Platform, PlatformProfile] = {
     Platform.ORIN_AGX: _ORIN_AGX_PROFILE,
     Platform.NANO: _NANO_PROFILE,
+    Platform.ORIN_NANO: _ORIN_NANO_PROFILE,
 }
 
 

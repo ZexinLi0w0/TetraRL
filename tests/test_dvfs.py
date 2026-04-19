@@ -209,3 +209,38 @@ def test_nano_top_freqs_below_orin():
     o_avail = orin.available_frequencies()
     assert n_avail["cpu"][-1] < o_avail["cpu"][-1]
     assert n_avail["gpu"][-1] < o_avail["gpu"][-1]
+
+
+# --- Orin Nano (8 GB) tests --------------------------------------------------
+
+
+def test_orin_nano_profile_selects_orin_nano_freq_tables():
+    ctrl = DVFSController(platform=Platform.ORIN_NANO, stub=True)
+    avail = ctrl.available_frequencies()
+    assert avail["cpu"][0] == 115_200
+    assert avail["cpu"][-1] == 1_510_400
+    assert avail["gpu"][0] == 306_000_000
+    assert avail["gpu"][-1] == 624_750_000
+
+
+def test_orin_nano_set_freq_uses_orin_nano_table():
+    ctrl = DVFSController(platform=Platform.ORIN_NANO, stub=True)
+    state = ctrl.set_freq(cpu_idx=10, gpu_idx=2)
+    orin_nano_cpu = ctrl.profile.cpu_freqs_hz
+    orin_nano_gpu = ctrl.profile.gpu_freqs_hz
+    assert state.cpu_freq_khz == orin_nano_cpu[10]
+    assert state.gpu_freq_hz == orin_nano_gpu[2]
+
+
+def test_orin_nano_string_arg_works():
+    by_str = DVFSController(platform="orin_nano", stub=True)
+    by_enum = DVFSController(platform=Platform.ORIN_NANO, stub=True)
+    assert by_str.available_frequencies() == by_enum.available_frequencies()
+
+
+def test_orin_nano_gpu_paths_use_ga10b_address():
+    ctrl = DVFSController(platform=Platform.ORIN_NANO, stub=True)
+    gpu_paths = ctrl.gpu_paths
+    assert "17000000.ga10b" in gpu_paths["min"]
+    assert "17000000.ga10b" in gpu_paths["max"]
+    assert "17000000.ga10b" in gpu_paths["cur"]
