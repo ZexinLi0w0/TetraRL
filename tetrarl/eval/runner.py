@@ -274,7 +274,17 @@ class _PreferencePPOArbiter:
 # -----------------------------------------------------------------------------
 
 
-def _make_preference_plane(ablation: str):
+def _make_preference_plane(ablation: str, omega: list | None = None):
+    """Build the preference plane for a single eval run.
+
+    When ``omega`` is provided (typically from ``EvalConfig.extra["omega"]``),
+    a :class:`StaticPreferencePlane` is built from that vector regardless of
+    its dimensionality (2-D legacy, 4-D Week 10 matrix, etc.). When ``omega``
+    is ``None`` the legacy 2-D ``DEFAULT_OMEGA`` path is preserved so existing
+    runs behave bit-identically.
+    """
+    if omega is not None:
+        return StaticPreferencePlane(np.asarray(omega, dtype=np.float32))
     if ablation == "preference_plane":
         return _NullPreferencePlane(n_objectives=2)
     return StaticPreferencePlane(DEFAULT_OMEGA.copy())
@@ -298,6 +308,27 @@ def _make_rl_arbiter(agent_type: str, ablation: str, n_actions: int, seed: int):
     if agent_type == "dvfs_drl_multitask":
         from tetrarl.morl.baselines.dvfs_drl_multitask import DVFSDRLMultitaskArbiter
         return DVFSDRLMultitaskArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "envelope_morl":
+        from tetrarl.morl.baselines.envelope_morl import EnvelopeMORLArbiter
+        return EnvelopeMORLArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "ppo_lagrangian":
+        from tetrarl.morl.baselines.ppo_lagrangian_arbiter import PPOLagrangianArbiter
+        return PPOLagrangianArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "focops":
+        from tetrarl.morl.baselines.focops import FOCOPSArbiter
+        return FOCOPSArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "duojoule":
+        from tetrarl.morl.baselines.duojoule import DuoJouleArbiter
+        return DuoJouleArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "max_a":
+        from tetrarl.morl.baselines.max_action import MaxActionArbiter
+        return MaxActionArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "max_p":
+        from tetrarl.morl.baselines.max_performance import MaxPerformanceArbiter
+        return MaxPerformanceArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "pcn":
+        from tetrarl.morl.baselines.pcn import PCNArbiter
+        return PCNArbiter(n_actions=n_actions, seed=seed)
     # Unknown agent_type -> safe fallback
     return _RandomArbiter(n_actions=n_actions, seed=seed)
 
@@ -399,7 +430,8 @@ class EvalRunner:
         tests can build the framework without instantiating Gymnasium;
         :meth:`run` rebuilds with the real ``env.action_space.n``.
         """
-        pref = _make_preference_plane(cfg.ablation)
+        omega_extra = cfg.extra.get("omega") if cfg.extra else None
+        pref = _make_preference_plane(cfg.ablation, omega=omega_extra)
         rm = _make_resource_manager(cfg.ablation)
         arbiter = _make_rl_arbiter(cfg.agent_type, cfg.ablation, n_actions, cfg.seed)
         override = _make_override_layer(cfg.ablation, fallback_action=0)
@@ -435,6 +467,15 @@ class EvalRunner:
             return self._run_vec_env(cfg)
 
         env = gym.make(cfg.env_name)
+        # Wrap multi-objective DAG env so the scalar-reward eval loop can
+        # consume its 4-vector reward via omega @ r_vec. Defaults to a
+        # uniform 4-D omega when none is provided in cfg.extra.
+        if cfg.env_name.startswith("dag_scheduler_mo"):
+            from tetrarl.envs.wrappers import MOAggregateWrapper
+            omega_vec = cfg.extra.get("omega") if cfg.extra else None
+            if omega_vec is None:
+                omega_vec = [0.25, 0.25, 0.25, 0.25]
+            env = MOAggregateWrapper(env, omega=np.asarray(omega_vec, dtype=np.float32))
         try:
             n_actions = int(env.action_space.n)  # type: ignore[attr-defined]
         except AttributeError:
@@ -555,8 +596,18 @@ class EvalRunner:
         n_episodes_per_env = int(cfg.n_episodes)
         env_name = cfg.env_name
 
+        # Resolve per-env wrapping for MO envs once, outside the factory.
+        wrap_mo = env_name.startswith("dag_scheduler_mo")
+        omega_vec = cfg.extra.get("omega") if cfg.extra else None
+        if wrap_mo and omega_vec is None:
+            omega_vec = [0.25, 0.25, 0.25, 0.25]
+
         def _make_one(env_name: str = env_name):
-            return gym.make(env_name)
+            e = gym.make(env_name)
+            if wrap_mo:
+                from tetrarl.envs.wrappers import MOAggregateWrapper
+                e = MOAggregateWrapper(e, omega=np.asarray(omega_vec, dtype=np.float32))
+            return e
 
         vec_env = gym.vector.SyncVectorEnv([_make_one for _ in range(n_envs)])
         try:
