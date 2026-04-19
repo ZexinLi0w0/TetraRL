@@ -17,14 +17,15 @@ from a per-preference-vector breakdown so a reader can see how the
 tail moves as the arbiter is steered toward different objectives
 under each interference condition.
 
-The W9 PR lands the code and design for all three threads. The
-empirical re-runs that need physical Orin access are deferred — orin1
-SSH was unreachable on 2026-04-19 — but the YAML configs, runner
-branches, sweep script, and figure generator are all in place so the
-eventual hardware runs are one-liners. This document is the rationale
-that ties the three threads together and the place a downstream reader
-should look to understand which numbers in the eventual paper are
-bit-exact and which are platform-dependent.
+The W9 PR lands the code and design for all three threads. A code-only
+companion PR (#25, merged 2026-04-19 12:25 PDT) shipped the YAML
+configs, runner branches, sweep script, and figure generator while
+orin1 SSH was unreachable; this follow-up PR collects the actual
+empirical data and updates the tables and figure once SSH was
+restored. This document is the rationale that ties the three threads
+together and the place a downstream reader should look to understand
+which numbers in the eventual paper are bit-exact and which are
+platform-dependent.
 
 ## 2. Multi-env x DVFS interaction
 
@@ -226,16 +227,50 @@ Both deltas should appear in the same direction across all five arms,
 which gives a reader a sanity check on whether the paired tables are
 internally consistent.
 
-### 4.4 Today's deferral
+### 4.3.1 Empirical Table 4' (real Orin AGX, 2026-04-19)
 
-orin1 was unreachable on 2026-04-19 (SSH timeout to
-169.235.25.145:8002, retried twice, see `progress.md` in the W9
-handoff). Per the steer-update in `spec.md`, this PR ships the
-code-only changes (the W8 bug fix, the multi-env runner branch, the
-sweep script, the figure generator, the design doc) and defers the
-empirical re-run until SSH is restored. The follow-up commit that
-lands the actual numbers is a one-liner against the same
-`ablation_full.yaml` and is a hardware-side concern only.
+The real-Orin re-run completed on 2026-04-19 against
+``tetrarl/eval/configs/ablation_full.yaml`` with ``platform=orin_agx``,
+``governor=userspace`` set on every CPU core, and the ablation matrix
+data shared with the W8 ablation re-run PR (no double-run on Orin per
+the data-sharing optimization in the W9 spec).
+
+| Ablation | n_steps (μ ± σ) | Override fires (μ ± σ) | Tail p99 ms (μ ± σ) | Mean energy J (μ ± σ) | Mean Reward (μ ± σ) | p (n_steps) | p (override) | p (tail p99) | p (reward) | sig |
+|---|---|---|---|---|---|---|---|---|---|---|
+| none | 3122.667 ± 38.083 | 51.000 ± 8.718 | 0.065 ± 0.002 | 0.001 ± 0.000 | 1.000 ± 0.000 | — | — | — | — |  |
+| preference_plane | 4354.667 ± 213.149 | 292.333 ± 56.501 | 0.069 ± 0.001 | 0.001 ± 0.000 | 1.000 ± 0.000 | 0.008 | 0.016 | 0.041 | — | ** |
+| resource_manager | 3122.667 ± 38.083 | 51.000 ± 8.718 | 0.064 ± 0.001 | 0.001 ± 0.000 | 1.000 ± 0.000 | 1.000 | 1.000 | 0.735 | — | ns |
+| rl_arbiter | 4264.667 ± 119.525 | 292.667 ± 40.377 | 0.044 ± 0.000 | 0.001 ± 0.000 | 1.000 ± 0.000 | 0.002 | 0.007 | 0.003 | — | ** |
+| override_layer | 3135.667 ± 16.258 | 0.000 ± 0.000 | 0.060 ± 0.000 | 0.001 ± 0.000 | 1.000 ± 0.000 | 0.628 | 0.010 | 0.050 | — | ** |
+
+The five bit-exact metrics (n_steps, override fires, mean reward, mean
+energy, mean memory_util) match the W8 Mac-stub Table 4 to the digit,
+confirming that those columns are platform-independent as Section 4.1
+predicted. The tail-p99 column moves substantially: real Orin tails
+sit at 0.044–0.069 ms, ~5–7x the W8 Mac-stub baseline of 0.009–0.010
+ms. The relative ordering of the arms is preserved (rl_arbiter has
+the lowest tail in both, override_layer the second-lowest), so the
+paper's qualitative ablation conclusion stands.
+
+The significance pattern shifts: on Mac the tail-p99 deltas were
+indistinguishable from baseline (p = 0.685 / 0.610 / 0.151 / 0.326 for
+the four non-baseline arms), while on real Orin the tails of
+preference_plane (p = 0.041), rl_arbiter (p = 0.003) and override_layer
+(p = 0.050) are now significant. This is the expected qualitative shift
+when the underlying noise floor changes from Mac jitter
+(host-OS-bounded, ~10 μs) to Orin tegrastats sampling jitter
+(~50–60 μs); the per-arm tail differences become visible when the noise
+floor is 5x larger but the per-arm signal is preserved.
+
+### 4.4 SSH outage timeline and resolution
+
+orin1 was unreachable when the W9 code-only PR (#25) landed: SSH
+timeouts to 169.235.25.145:8002 on three independent attempts at
+25 s / 40 s / 60 s budgets, documented in `progress.md`. SSH was
+restored 2026-04-19 12:25 PDT (verified ``hostname=ubuntu``) and the
+empirical re-run executed at 12:38–13:02 PDT. The follow-up commit
+that lands the actual numbers is what this PR adds; the runner code
+path, sweep driver, and figure generator are unchanged from PR #25.
 
 ## 5. Bug fix: `_make_telemetry()` WARN
 
@@ -340,12 +375,12 @@ skips that one curve; an empty JSONL warns and skips the curve. The
 script only hard-fails (exit 1) if `--orin-dir` or `--nano-dir`
 itself is missing or if zero curves were plotted on either panel.
 This is a deliberate design choice for the W9 PR: the per-omega data
-collection on Orin is deferred (Section 4.4 above) and the per-omega
-data collection on Nano is the responsibility of the parallel
-`week9-nano-deep` PR. Either side can land its data tree before the
-other and the figure script will produce a partial figure rather
-than crashing. Once both trees are populated, re-running the script
-produces the complete 12-curve-per-panel figure with no code
+collection on Orin lands in this follow-up PR (Section 6.4 below) and
+the per-omega data collection on Nano is the responsibility of the
+parallel `week9-nano-deep` PR. Either side can land its data tree
+before the other and the figure script will produce a partial figure
+rather than crashing. Once both trees are populated, re-running the
+script produces the complete 12-curve-per-panel figure with no code
 changes.
 
 The dovetail with `week9-nano-deep` is the explicit reason the panel
@@ -354,49 +389,114 @@ single-panel. The two PRs land independently against the same
 figure-generator entry point; the figure stitches together as soon
 as both data trees are present.
 
+### 6.3 Empirical multi-env scaling table (real Orin AGX, 2026-04-19)
+
+The 6-config sweep completed on 2026-04-19 with the same Orin AGX,
+``governor=userspace``, n_episodes=50 per env. All six rows pass the
+``tail_p99_ratio_vs_nenvs1_same_dvfs < 3x`` validation knob (Section
+2.3); the worst row is n_envs=2 under userspace_with_arbiter at 1.37x,
+well within the spec budget.
+
+| n_envs | dvfs_mode | total_episodes | tail_p99_ms | wall_time_s | tail_p99_ratio_vs_nenvs1_same_dvfs |
+|---|---|---|---|---|---|
+| 1 | fixed_max | 50 | 0.0706 | 0.0680 | 1.0000 |
+| 1 | userspace_with_arbiter | 50 | 0.0665 | 0.0648 | 1.0000 |
+| 2 | fixed_max | 100 | 0.0901 | 0.1945 | 1.2765 |
+| 2 | userspace_with_arbiter | 100 | 0.0912 | 0.1918 | 1.3715 |
+| 4 | fixed_max | 200 | 0.0745 | 0.2779 | 1.0549 |
+| 4 | userspace_with_arbiter | 200 | 0.0749 | 0.2766 | 1.1264 |
+
+The DVFS-on minus DVFS-off delta at fixed n_envs is small
+(1.37 − 1.28 = 0.09 at n=2; 1.13 − 1.05 = 0.08 at n=4). At this
+workload (CartPole step on a Cortex-A78AE cluster) the per-step
+framework cost is small enough (~70 μs at n=1) that DVFS-induced
+straggler effects do not dominate. The non-monotonic ratio
+(n=4 < n=2) is consistent with SyncVectorEnv per-batch overhead
+amortising over more envs once each env's per-step cost stabilises;
+this is a known behaviour of vector envs whose per-env step is
+near-constant.
+
+No row triggers the > 3x failure mode discussed in Section 2.3, so the
+fallback plans (drop the failing n_envs row, switch to AsyncVectorEnv,
+or per-env DVFS pinning) are not needed for this configuration.
+
+### 6.4 Empirical per-omega CDF figure (Orin panel, 2026-04-19)
+
+The per-omega Orin data tree is now populated with 12 JSONL files
+(3 ω × 4 conditions × 3000 steps each, ``--n-steps 3000``). The Nano
+panel remains empty pending the parallel ``week9-nano-deep`` /
+``week9-nano-hardware`` PR; per Section 6.2 the figure script
+gracefully skips missing data and the Orin panel renders alone with
+the Nano panel marked accordingly. Figure path:
+``runs/w9_combined_cdf_per_omega.png`` (sidecar summary at
+``runs/w9_combined_cdf_per_omega.png.summary.md``).
+
+| platform | omega | condition | n | p50_ms | p95_ms | p99_ms |
+|----------|-------|-----------|---|--------|--------|--------|
+| orin | energy_corner | none | 3000 | 0.036 | 0.049 | 0.057 |
+| orin | energy_corner | 720p | 3000 | 0.036 | 0.048 | 0.052 |
+| orin | energy_corner | 1080p | 3000 | 0.035 | 0.048 | 0.051 |
+| orin | energy_corner | 2K | 3000 | 0.035 | 0.046 | 0.051 |
+| orin | memory_corner | none | 3000 | 0.037 | 0.050 | 0.057 |
+| orin | memory_corner | 720p | 3000 | 0.036 | 0.049 | 0.052 |
+| orin | memory_corner | 1080p | 3000 | 0.036 | 0.045 | 0.051 |
+| orin | memory_corner | 2K | 3000 | 0.036 | 0.048 | 0.052 |
+| orin | center | none | 3000 | 0.036 | 0.049 | 0.055 |
+| orin | center | 720p | 3000 | 0.036 | 0.048 | 0.052 |
+| orin | center | 1080p | 3000 | 0.036 | 0.045 | 0.051 |
+| orin | center | 2K | 3000 | 0.036 | 0.045 | 0.051 |
+
+Across all three ω vectors the ffmpeg co-runner conditions show p99
+that is statistically indistinguishable from (or marginally lower
+than) the ``none`` baseline. The framework step at this CartPole
+workload is ~36 μs (p50) which is small relative to the FFmpeg
+decoder's per-frame work; on the Orin AGX cluster the FFmpeg co-runner
+does not produce a measurable interference signal at any of the
+tested resolutions. This is itself a useful negative result: at this
+operating point the system is not co-runner-bound, and the p99 budget
+is determined by per-step framework jitter rather than interference
+from a concurrent video decoder. The Nano panel is expected to expose
+the more interesting interference signature once it lands (slower CPU
++ smaller cache → higher per-step variance under co-runner load).
+
 ## 7. What lands in this PR vs deferred
 
-This PR lands all of the code, scripts, and tests; it defers all of
-the empirical Orin runs.
+This W9 follow-up PR collects the empirical data deferred from the
+W9 code-only PR (#25); all of the code, scripts, and tests for the
+multi-env runner branch, the sweep driver, the figure generator,
+and the per-omega ω plumbing land in PR #25 (already merged) plus a
+small ``--omega`` CLI extension to ``scripts/week7_ffmpeg_corunner.py``
+(Section 6.4) added in this follow-up.
 
-### 7.1 Lands now
+### 7.1 Lands now (this PR)
 
-- `tetrarl/eval/runner.py`: the `n_envs` field on `EvalConfig`, the
-  `gym.vector.SyncVectorEnv` branch in `EvalRunner.run` (via
-  `_run_vec_env`), and the `_make_telemetry()` `RuntimeWarning` on
-  `platform.startswith("orin_")`.
-- `scripts/week9_multienv_sweep.py`: the 6-config sweep driver
-  (`build_sweep_configs` for the matrix, `_build_summary_rows` and
-  `_format_summary_table` for the per-row Markdown output, plus a
-  `--dry-run` mode for offline validation).
-- `scripts/week9_make_expanded_cdf.py`: the per-omega figure
-  generator with the graceful-skip behaviour described in Section
-  6.2.
-- `docs/week9_multienv_design.md`: this file.
-- 35+ new unit tests covering the multi-env runner branch, the
-  warning emission, the sweep driver row construction, the
-  per-omega figure generator's plotting and skip behaviour. All
-  pre-existing tests (340+ baseline) continue to pass.
+- ``runs/w9_ablation_orin_real/`` — real-Orin ablation matrix data
+  (15 JSONL + summary.csv + ablation_table.md), shared from the
+  parallel ``week8-ablation-rerun`` PR per the data-sharing
+  optimization in the W9 spec.
+- ``runs/w9_multienv_orin/`` — 6-config multi-env scaling sweep
+  (one JSONL per (n_envs, dvfs_mode) row + summary CSV +
+  multienv_summary.md).
+- ``runs/w9_ffmpeg_orin_per_omega/`` — 12 JSONL files (3 ω × 4
+  conditions) populated by the per-omega ffmpeg co-runner sweep.
+- ``runs/w9_combined_cdf_per_omega.{png,svg}`` — partial per-omega
+  CDF figure (Orin panel populated, Nano panel pending the
+  parallel ``week9-nano-deep`` PR).
+- ``scripts/week7_ffmpeg_corunner.py`` — added ``--omega`` CLI flag
+  + ``OMEGA_PRESETS`` / ``parse_omega_name`` helpers; passed
+  through to ``make_framework`` via a new optional ``omega`` kwarg.
+- ``tests/test_week7_ffmpeg_corunner_omega.py`` — 7 new unit tests
+  covering the omega preset table, parser, and framework
+  propagation.
+- This document, updated with Sections 4.3.1, 6.3 and 6.4
+  containing the empirical tables.
 
-### 7.2 Deferred (orin1 SSH unreachable on 2026-04-19)
+### 7.2 Still pending (parallel PRs)
 
-- Real-Orin ablation re-run (Task A): the `python -m tetrarl.eval.
-  runner --config tetrarl/eval/configs/ablation_full.yaml --out-dir
-  runs/w9_ablation_orin_real/` one-liner from `spec.md`.
-- 6-config sweep on real Orin (Task B): the `python scripts/
-  week9_multienv_sweep.py --out-dir runs/w9_multienv_orin/`
-  one-liner from `spec.md`.
-- Per-omega FFmpeg co-runner data collection on Orin (Task C): the
-  three repeat-per-omega invocations of `scripts/
-  week7_ffmpeg_corunner.py` documented in `spec.md`.
-- The eventual paper Table 4', the multi-env scaling table, and the
-  populated 12-curve expanded CDF figure.
-
-The deferred items are entirely hardware-dependent. The code path
-that consumes their output (the runner, the sweep driver, the figure
-generator) is already merged and tested on Mac, so the follow-up
-commit that lands the data is purely an `out_dir` of JSONLs plus a
-re-run of the figure generator.
+- Nano panel of the per-omega CDF figure: provided by the parallel
+  ``week9-nano-deep`` / ``week9-nano-hardware`` PR. The figure
+  script will re-stitch a complete 24-curve figure once the Nano
+  data tree lands; no additional code changes are required.
 
 ## 8. Limitations
 
