@@ -27,6 +27,9 @@ p90 / p99 / p99.9 plus the `slowdown_p99` column relative to the
   reproducible from any clean checkout. The synthetic source still
   exercises the encoder/null-mux path and produces measurable CPU
   pressure (we see ~3.7x p99 slowdown on Mac at 720p with 200 steps).
+  The Orin run reproduces the same CPU-decode signature (Mac was
+  always CPU-decode; Orin too — see *Hardware decode availability
+  on Orin* below).
 * **Optional real-video path on Orin.** Pass `--video PATH` to use
   `-stream_loop -1 -i PATH` instead, so the Orin run can compare
   apples-to-apples against R³'s measurements when a real H.264
@@ -64,6 +67,40 @@ is listed. This keeps the same CLI usable on both platforms;
 It is also dropped when `video_path` is `None` (synthetic `lavfi`
 testsrc), because lavfi generates raw frames and there is no H.264
 bitstream to decode.
+
+## Hardware decode availability on Orin (W7 cleanup investigation)
+
+A direct probe of the static `ffmpeg` shipped on the Orin test board
+(johnvansickle.com 7.0.2 build, libavcodec 61.3.100, installed at
+`/experiment/zexin/bin/ffmpeg`) shows:
+
+* `ffmpeg -hwaccels` lists **only `vdpau`**. None of `nvv4l2dec`,
+  `nvdec`, `cuda`, or `cuvid` appear.
+* `ffmpeg -decoders | grep -i nv` returns only unrelated codec names
+  (`dsicinvideo`, `idcinvideo`, `wnv1`, `twinvq`); the build exposes
+  **no NVIDIA H.264 decoder**.
+
+Consequently `FFmpegInterference._hw_decode_available()` returned
+`False` on Orin — the same gate that drops the flag on Mac — and
+every W7 measurement that was assumed to exercise NVDEC was in fact
+**CPU-decode end-to-end**. The `--hw-decode` flag was a silent no-op
+on Orin too, not just Mac.
+
+Installing NVIDIA's gst/v4l2 NVMM packages (`nvidia-l4t-multimedia`)
+would unlock `nvv4l2dec` on the Orin, but that work is out-of-scope
+for the W7 cleanup sprint.
+
+The CPU-decode measurement is **still a valid R³-protocol
+interference measurement**. R³ specifies an `ffmpeg` co-runner, not
+specifically a hardware-decode co-runner. CPU-decode loads the CPU
+and memory bandwidth, which is exactly the resource the RL training
+loop is competing for, so the resulting tail-latency slowdown is a
+faithful interference signature for the workload-under-test.
+
+Going forward the figures and plots produced from
+`runs/w7_ffmpeg_*/` are relabelled as **"FFmpeg CPU-decode
+co-runner"** (not "HW-decode co-runner") so the published
+interpretation matches what was actually measured.
 
 ## How to read the percentile table
 
@@ -106,6 +143,9 @@ with `ps`).
   decoder; this is captured indirectly via `latency_ms` if the
   pressure pushes the workload into swap, but is not reported as
   a separate column.
+* **NVDEC hardware decode** — see *Hardware decode availability on
+  Orin* above; static ffmpeg on the test board exposes no NVIDIA
+  decoder so the harness ran CPU-decode end-to-end.
 
 ## File layout
 

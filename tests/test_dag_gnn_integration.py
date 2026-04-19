@@ -68,7 +68,7 @@ def test_train_preference_ppo_runs_on_dag_with_gnn():
         ref_point=[0.0, -50.0, -50.0],
     )
     def env_fn():
-        return DAGSchedulerEnv(n_tasks=4, density=0.3, seed=0)
+        return DAGSchedulerEnv(n_tasks=4, density=0.3, seed=0, reward_dim=3)
     gnn = GCNFeatureExtractor(in_dim=4, hidden_dim=16, out_dim=16)
     results = train_preference_ppo(
         config, env_fn, device="cpu", verbose=False,
@@ -81,8 +81,8 @@ def test_train_preference_ppo_runs_on_dag_with_gnn():
 def test_native_agent_dag_with_gnn_smoke():
     agent = TetraRLNativeAgent(
         env_name="dag",
-        obj_num=3,
-        ref_point=[0.0, -50.0, -50.0],
+        obj_num=4,
+        ref_point=[0.0, -50.0, -50.0, -1.0],
         total_timesteps=512,
         num_steps=128,
         hidden_dim=16,

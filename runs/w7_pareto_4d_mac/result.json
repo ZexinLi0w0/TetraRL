@@ -1,0 +1,116 @@
+{
+  "env": "dag_scheduler_mo",
+  "steps_per_omega": 5000,
+  "obj_num": 4,
+  "ref_point": [
+    0.0,
+    -100.0,
+    -100.0,
+    -100.0
+  ],
+  "omegas": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ]
+  ],
+  "points": [
+    [
+      1.0,
+      -0.7523645559946696,
+      -0.9641533295313517,
+      -0.12518982092539468
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.6666666666666666,
+      -0.8288381099700928,
+      -0.5498390595118204,
+      -0.1468146691719691
+    ],
+    [
+      0.6666666666666666,
+      -0.6289247671763102,
+      -0.6604444781939188,
+      -0.10155945519606273
+    ],
+    [
+      0.3333333333333333,
+      -0.40162158012390137,
+      -0.3334087133407593,
+      -0.05941944817701975
+    ]
+  ],
+  "pareto_front": [
+    [
+      1.0,
+      -0.7523645559946696,
+      -0.9641533295313517,
+      -0.12518982092539468
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.6666666666666666,
+      -0.8288381099700928,
+      -0.5498390595118204,
+      -0.1468146691719691
+    ],
+    [
+      0.6666666666666666,
+      -0.6289247671763102,
+      -0.6604444781939188,
+      -0.10155945519606273
+    ],
+    [
+      0.3333333333333333,
+      -0.40162158012390137,
+      -0.3334087133407593,
+      -0.05941944817701975
+    ]
+  ],
+  "hv": 986996.8973896984,
+  "synthetic": false,
+  "fallback_reason": null,
+  "artifacts": {
+    "projection_Throughput_vs_Latency": "/Users/zexinli/Downloads/TetraRL-w7-cleanup/runs/w7_pareto_4d_mac/projection_Throughput_vs_Latency.png",
+    "projection_Throughput_vs_Energy": "/Users/zexinli/Downloads/TetraRL-w7-cleanup/runs/w7_pareto_4d_mac/projection_Throughput_vs_Energy.png",
+    "projection_Throughput_vs_Memory": "/Users/zexinli/Downloads/TetraRL-w7-cleanup/runs/w7_pareto_4d_mac/projection_Throughput_vs_Memory.png",
+    "combined": "/Users/zexinli/Downloads/TetraRL-w7-cleanup/runs/w7_pareto_4d_mac/pareto_combined.svg"
+  }
+}

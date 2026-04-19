@@ -2,8 +2,14 @@
 
 This env is built specifically to exercise the GCN feature extractor in
 `tetrarl/morl/native/gnn_extractor.py`: it produces graph-structured
-observations (node_features, edge_index) and a 3-objective reward vector
-[throughput, -energy, -peak_memory].
+observations (node_features, edge_index) and a 4-objective reward vector
+``[throughput, -energy_step, -peak_memory_delta, -energy_normalized_step]``.
+
+The 4th component is the per-step energy contribution normalized by the
+maximum possible cumulative energy in the episode at ``dvfs=1.0``. A
+backward-compat ``reward_dim=3`` constructor flag drops the 4th component
+and returns the legacy ``[throughput, -energy_step, -peak_memory_delta]``
+vector for callers that have not migrated to the R^4 framework yet.
 """
 
 from __future__ import annotations
@@ -55,8 +61,19 @@ def test_env_action_space_is_discrete_n():
     assert env.action_space.n == 8
 
 
-def test_env_reward_vector_is_3d():
+def test_env_reward_vector_is_4d_by_default():
     env = DAGSchedulerEnv(n_tasks=6, density=0.3, seed=0)
+    assert env.reward_dim == 4
+    obs, _ = env.reset(seed=0)
+    mask = obs["valid_mask"].astype(bool)
+    valid_actions = np.where(mask)[0]
+    assert len(valid_actions) >= 1
+    _, r_vec, _, _, _ = env.step(int(valid_actions[0]))
+    assert r_vec.shape == (4,)
+
+
+def test_env_reward_vector_is_3d_with_backward_compat_flag():
+    env = DAGSchedulerEnv(n_tasks=6, density=0.3, seed=0, reward_dim=3)
     assert env.reward_dim == 3
     obs, _ = env.reset(seed=0)
     mask = obs["valid_mask"].astype(bool)
@@ -116,7 +133,7 @@ def test_episode_terminates_when_all_tasks_complete():
 def test_throughput_sums_to_n_at_completion():
     env = DAGSchedulerEnv(n_tasks=4, density=0.0, seed=0)
     env.reset(seed=0)
-    total = np.zeros(3)
+    total = np.zeros(4)
     terminated = False
     while not terminated:
         obs = env._get_obs()
@@ -136,6 +153,64 @@ def test_negative_energy_and_memory_components():
     _, r_vec, _, _, _ = env.step(int(valid[0]))
     assert r_vec[1] <= 0.0
     assert r_vec[2] <= 0.0
+    assert r_vec[3] <= 0.0
+
+
+def test_energy_normalized_uses_dvfs_scaling():
+    env_a = DAGSchedulerEnv(n_tasks=6, density=0.3, seed=0, dvfs_scaling_factor=1.0)
+    env_b = DAGSchedulerEnv(n_tasks=6, density=0.3, seed=0, dvfs_scaling_factor=2.0)
+    obs_a, _ = env_a.reset(seed=0)
+    obs_b, _ = env_b.reset(seed=0)
+    valid_a = np.where(obs_a["valid_mask"].astype(bool))[0]
+    valid_b = np.where(obs_b["valid_mask"].astype(bool))[0]
+    assert len(valid_a) >= 1 and len(valid_b) >= 1
+    assert valid_a[0] == valid_b[0]
+    _, r_vec_a, _, _, _ = env_a.step(int(valid_a[0]))
+    _, r_vec_b, _, _, _ = env_b.step(int(valid_b[0]))
+    assert r_vec_a[3] < 0.0
+    assert np.isclose(abs(r_vec_b[3]), 2.0 * abs(r_vec_a[3]))
+
+
+def test_energy_normalized_invalid_action_is_zero():
+    env = DAGSchedulerEnv(n_tasks=5, density=1.0, seed=0)
+    obs, _ = env.reset(seed=0)
+    mask = obs["valid_mask"].astype(bool)
+    invalid_actions = np.where(~mask)[0]
+    if len(invalid_actions) == 0:
+        pytest.skip("no invalid actions in this seed/density")
+    invalid = int(invalid_actions[0])
+    _, r_vec, _, _, _ = env.step(invalid)
+    assert r_vec[3] == 0.0
+
+
+def test_episode_sum_of_normalized_energy_in_unit_interval():
+    env = DAGSchedulerEnv(n_tasks=4, density=0.0, seed=0)
+    env.reset(seed=0)
+    total = np.zeros(4)
+    terminated = False
+    while not terminated:
+        obs = env._get_obs()
+        valid = np.where(obs["valid_mask"].astype(bool))[0]
+        _, r_vec, terminated, trunc, _ = env.step(int(valid[0]))
+        total += r_vec
+        if trunc:
+            break
+    assert -1.0 - 1e-6 <= total[3] <= 0.0
+    assert np.isclose(total[3], -1.0, atol=1e-6)
+
+
+def test_invalid_reward_dim_raises():
+    with pytest.raises(ValueError):
+        DAGSchedulerEnv(n_tasks=4, density=0.3, seed=0, reward_dim=2)
+    with pytest.raises(ValueError):
+        DAGSchedulerEnv(n_tasks=4, density=0.3, seed=0, reward_dim=5)
+
+
+def test_invalid_dvfs_scaling_raises():
+    with pytest.raises(ValueError):
+        DAGSchedulerEnv(n_tasks=4, density=0.3, seed=0, dvfs_scaling_factor=0.0)
+    with pytest.raises(ValueError):
+        DAGSchedulerEnv(n_tasks=4, density=0.3, seed=0, dvfs_scaling_factor=-1.0)
 
 
 def test_env_seed_determinism():
