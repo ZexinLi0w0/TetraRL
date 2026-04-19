@@ -295,6 +295,9 @@ def _make_rl_arbiter(agent_type: str, ablation: str, n_actions: int, seed: int):
         return _FixedActionArbiter(action=0)
     if agent_type == "preference_ppo":
         return _PreferencePPOArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "dvfs_drl_multitask":
+        from tetrarl.morl.baselines.dvfs_drl_multitask import DVFSDRLMultitaskArbiter
+        return DVFSDRLMultitaskArbiter(n_actions=n_actions, seed=seed)
     # Unknown agent_type -> safe fallback
     return _RandomArbiter(n_actions=n_actions, seed=seed)
 
