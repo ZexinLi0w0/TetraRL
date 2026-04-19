@@ -1,0 +1,87 @@
+{
+  "platform": "nano",
+  "effort": "max",
+  "n_steps": 5000,
+  "with_lag_feature": true,
+  "use_real_dvfs": false,
+  "use_real_tegrastats": true,
+  "track_memory": true,
+  "hostname": "ubuntu",
+  "device": "Linux ubuntu 5.10.120-tegra aarch64",
+  "pid": 45855,
+  "mean_bare_step_ms": 0.0301478976,
+  "mean_framework_step_ms": 1.4897560832,
+  "framework_overhead_pct": 4841.492448216356,
+  "components": {
+    "lag_feature_extract": {
+      "mean_ms": 0.08821053440000001,
+      "p50_ms": 0.086624,
+      "p99_ms": 0.11114784000000026,
+      "mem_mb": 0.008650779724121094,
+      "rss_mb": 0.2578125,
+      "n_samples": 5000
+    },
+    "preference_plane_get": {
+      "mean_ms": 0.0084974528,
+      "p50_ms": 0.008416,
+      "p99_ms": 0.009472,
+      "mem_mb": 0.010789871215820312,
+      "rss_mb": 0.65625,
+      "n_samples": 5000
+    },
+    "tegra_daemon_sample": {
+      "mean_ms": 0.026838636799999996,
+      "p50_ms": 0.026496,
+      "p99_ms": 0.031200640000000012,
+      "mem_mb": 0.00800323486328125,
+      "rss_mb": 0.2578125,
+      "n_samples": 5000
+    },
+    "rl_arbiter_act": {
+      "mean_ms": 0.0103324096,
+      "p50_ms": 0.010208,
+      "p99_ms": 0.011808,
+      "mem_mb": 0.0004024505615234375,
+      "rss_mb": 0.0,
+      "n_samples": 5000
+    },
+    "override_layer_step": {
+      "mean_ms": 0.0074477888,
+      "p50_ms": 0.007328,
+      "p99_ms": 0.008416,
+      "mem_mb": 0.0016632080078125,
+      "rss_mb": 0.2578125,
+      "n_samples": 5000
+    },
+    "resource_manager_decide": {
+      "mean_ms": 0.011750111999999998,
+      "p50_ms": 0.011616,
+      "p99_ms": 0.012992320000000007,
+      "mem_mb": 0.000614166259765625,
+      "rss_mb": 0.0,
+      "n_samples": 5000
+    },
+    "dvfs_controller_set": {
+      "mean_ms": 0.021450079999999996,
+      "p50_ms": 0.021184,
+      "p99_ms": 0.023969280000000027,
+      "mem_mb": 0.008299827575683594,
+      "rss_mb": 0.2578125,
+      "n_samples": 5000
+    },
+    "replay_buffer_add": {
+      "mean_ms": 0.2369316352,
+      "p50_ms": 0.229408,
+      "p99_ms": 0.47635264,
+      "mem_mb": 0.008305549621582031,
+      "rss_mb": 1.43359375,
+      "n_samples": 5000
+    }
+  },
+  "deferred_dvfs_reason": null,
+  "artifacts": {
+    "overhead_table_md": "runs/w8_overhead_nano/overhead_table.md",
+    "overhead_breakdown_csv": "runs/w8_overhead_nano/overhead_breakdown.csv",
+    "lag_feature_overhead_md": "runs/w8_overhead_nano/lag_feature_overhead.md"
+  }
+}

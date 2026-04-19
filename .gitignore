@@ -27,11 +27,15 @@ venv/
 
 # Training artifacts
 runs/*
-# Whitelist Week 7 Nano deliverables (tracked validation artifacts for paper)
+# Whitelist Week 7 + Week 8 Nano deliverables (tracked validation artifacts for paper)
 !runs/w7_nano_cartpole/
 !runs/w7_nano_cartpole/**
 !runs/w7_ffmpeg_nano/
 !runs/w7_ffmpeg_nano/**
+!runs/w8_overhead_nano/
+!runs/w8_overhead_nano/**
+!runs/w8_overhead_nano_notrace/
+!runs/w8_overhead_nano_notrace/**
 checkpoints/
 *.pth
 *.h5
