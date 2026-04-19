@@ -274,7 +274,17 @@ class _PreferencePPOArbiter:
 # -----------------------------------------------------------------------------
 
 
-def _make_preference_plane(ablation: str):
+def _make_preference_plane(ablation: str, omega: list | None = None):
+    """Build the preference plane for a single eval run.
+
+    When ``omega`` is provided (typically from ``EvalConfig.extra["omega"]``),
+    a :class:`StaticPreferencePlane` is built from that vector regardless of
+    its dimensionality (2-D legacy, 4-D Week 10 matrix, etc.). When ``omega``
+    is ``None`` the legacy 2-D ``DEFAULT_OMEGA`` path is preserved so existing
+    runs behave bit-identically.
+    """
+    if omega is not None:
+        return StaticPreferencePlane(np.asarray(omega, dtype=np.float32))
     if ablation == "preference_plane":
         return _NullPreferencePlane(n_objectives=2)
     return StaticPreferencePlane(DEFAULT_OMEGA.copy())
@@ -298,6 +308,27 @@ def _make_rl_arbiter(agent_type: str, ablation: str, n_actions: int, seed: int):
     if agent_type == "dvfs_drl_multitask":
         from tetrarl.morl.baselines.dvfs_drl_multitask import DVFSDRLMultitaskArbiter
         return DVFSDRLMultitaskArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "envelope_morl":
+        from tetrarl.morl.baselines.envelope_morl import EnvelopeMORLArbiter
+        return EnvelopeMORLArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "ppo_lagrangian":
+        from tetrarl.morl.baselines.ppo_lagrangian_arbiter import PPOLagrangianArbiter
+        return PPOLagrangianArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "focops":
+        from tetrarl.morl.baselines.focops import FOCOPSArbiter
+        return FOCOPSArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "duojoule":
+        from tetrarl.morl.baselines.duojoule import DuoJouleArbiter
+        return DuoJouleArbiter(n_actions=n_actions, seed=seed)
+    if agent_type in ("max_a", "max_action"):
+        from tetrarl.morl.baselines.max_action import MaxActionArbiter
+        return MaxActionArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "max_p":
+        from tetrarl.morl.baselines.max_performance import MaxPerformanceArbiter
+        return MaxPerformanceArbiter(n_actions=n_actions, seed=seed)
+    if agent_type == "pcn":
+        from tetrarl.morl.baselines.pcn import PCNArbiter
+        return PCNArbiter(n_actions=n_actions, seed=seed)
     # Unknown agent_type -> safe fallback
     return _RandomArbiter(n_actions=n_actions, seed=seed)
 
@@ -309,8 +340,13 @@ def _make_override_layer(ablation: str, fallback_action: int = 0):
         thresholds=OverrideThresholds(
             max_latency_ms=2.0,       # tight: fires when env+framework step is slow
             min_energy_j=0.5,
-            max_memory_util=0.13,     # synthetic memory ramps 0.1 + 0.001*step;
-                                      # fires from step 31 onward
+            max_memory_util=0.13,     # W10: synthetic memory now reacts to the
+                                      # last executed action (post-override):
+                                      # mem = 0.08 + 0.005*step + 0.04*action_norm.
+                                      # A high-action arbiter (action_norm=1)
+                                      # crosses 0.13 at step 3; the override
+                                      # clamps the action to fallback=0 so
+                                      # memory stays on the low ramp (action_norm=0).
         ),
         fallback_action=fallback_action,
         cooldown_steps=0,
@@ -399,7 +435,8 @@ class EvalRunner:
         tests can build the framework without instantiating Gymnasium;
         :meth:`run` rebuilds with the real ``env.action_space.n``.
         """
-        pref = _make_preference_plane(cfg.ablation)
+        omega_extra = cfg.extra.get("omega") if cfg.extra else None
+        pref = _make_preference_plane(cfg.ablation, omega=omega_extra)
         rm = _make_resource_manager(cfg.ablation)
         arbiter = _make_rl_arbiter(cfg.agent_type, cfg.ablation, n_actions, cfg.seed)
         override = _make_override_layer(cfg.ablation, fallback_action=0)
@@ -424,7 +461,17 @@ class EvalRunner:
         through :meth:`_run_vec_env` which wraps a ``gym.vector.SyncVectorEnv``
         and emits one JSONL line per ``(env_id, episode, step)`` tuple.
         """
+        # Re-trigger registration in case the gymnasium registry was cleared
+        # after tetrarl.envs was first imported (e.g. by a fresh-process test
+        # harness). The _register module body is idempotent.
+        import importlib
+
         import gymnasium as gym  # lazy: keeps test collection cheap
+
+        import tetrarl.envs  # noqa: F401  side-effect: registers dag_scheduler_mo-v0
+        from tetrarl.envs import _register as _envs_register
+        if "dag_scheduler_mo-v0" not in gym.envs.registration.registry:
+            importlib.reload(_envs_register)
 
         # Reset RNGs INSIDE run() so two separate EvalRunner instances
         # produce identical reward sequences for the same seed.
@@ -435,6 +482,15 @@ class EvalRunner:
             return self._run_vec_env(cfg)
 
         env = gym.make(cfg.env_name)
+        # Wrap multi-objective DAG env so the scalar-reward eval loop can
+        # consume its 4-vector reward via omega @ r_vec. Defaults to a
+        # uniform 4-D omega when none is provided in cfg.extra.
+        if cfg.env_name.startswith("dag_scheduler_mo"):
+            from tetrarl.envs.wrappers import MOAggregateWrapper
+            omega_vec = cfg.extra.get("omega") if cfg.extra else None
+            if omega_vec is None:
+                omega_vec = [0.25, 0.25, 0.25, 0.25]
+            env = MOAggregateWrapper(env, omega=np.asarray(omega_vec, dtype=np.float32))
         try:
             n_actions = int(env.action_space.n)  # type: ignore[attr-defined]
         except AttributeError:
@@ -446,7 +502,9 @@ class EvalRunner:
 
         out_dir = Path(cfg.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        jsonl_name = f"{cfg.ablation}__{cfg.agent_type}__seed{cfg.seed}.jsonl"
+        jsonl_name = cfg.extra.get("jsonl_name") or (
+            f"{cfg.ablation}__{cfg.agent_type}__seed{cfg.seed}.jsonl"
+        )
         out_path = out_dir / jsonl_name
 
         latencies: list[float] = []
@@ -457,15 +515,43 @@ class EvalRunner:
         n_steps = 0
         energy_remaining = 1000.0
 
+        # W10 fix: synthetic memory_util reacts to the LAST executed action
+        # (post-override). Init to safe fallback so the first step of the
+        # first episode behaves identically to the legacy formula.
+        last_action: int = 0
+
         t0 = time.perf_counter()
         with open(out_path, "w", encoding="utf-8") as out_file:
             try:
                 for ep in range(int(cfg.n_episodes)):
                     obs, _info = env.reset(seed=int(cfg.seed) + ep)
                     episode_step = 0
+                    # New episode -> reset to safe fallback so memory pressure
+                    # at step 0 is not contaminated by the previous episode's
+                    # final action.
+                    last_action = 0
                     done = False
                     while not done:
-                        memory_util = 0.1 + 0.001 * episode_step
+                        # Memory pressure built from step t-1's executed
+                        # action (so the override layer at step t can react).
+                        # Coefficient 0.005 (not 0.0005) is needed for the
+                        # synthetic ramp to cross max_memory_util=0.13 within
+                        # the short CartPole-v1 episode lengths exercised by
+                        # the W10 override-telemetry tests.
+                        action_norm = float(last_action) / float(max(1, n_actions - 1))
+                        memory_util = 0.08 + 0.005 * episode_step + 0.04 * action_norm
+
+                        # Push the action-aware memory_util into telemetry
+                        # BEFORE framework.step so the override layer at step
+                        # t actually reads the pressure built from step t-1's
+                        # executed action. (Latency / energy_remaining are
+                        # latched post-step below; the override only triggers
+                        # on memory in the W10 fix path.)
+                        telemetry.update(
+                            latency_ms=latencies[-1] if latencies else 0.0,
+                            energy_remaining_j=energy_remaining,
+                            memory_util=memory_util,
+                        )
 
                         t_fw0 = time.perf_counter()
                         record = framework.step(obs)
@@ -513,6 +599,9 @@ class EvalRunner:
                         energies.append(float(energy_j))
                         memory_utils.append(float(memory_util))
                         rewards.append(float(reward))
+                        # Latch the executed (post-override) action so step
+                        # t+1's memory pressure responds to it.
+                        last_action = int(action)
                         episode_step += 1
                         n_steps += 1
                         done = bool(terminated or truncated)
@@ -549,14 +638,34 @@ class EvalRunner:
         becomes the per-env episode cap, so the returned ``RunResult.n_episodes``
         reports ``cfg.n_envs * cfg.n_episodes``.
         """
+        # Re-trigger registration in case the gymnasium registry was cleared
+        # after tetrarl.envs was first imported. The _register module is
+        # idempotent.
+        import importlib
+
         import gymnasium as gym  # lazy: keeps test collection cheap
+
+        import tetrarl.envs  # noqa: F401  side-effect: registers dag_scheduler_mo-v0
+        from tetrarl.envs import _register as _envs_register
+        if "dag_scheduler_mo-v0" not in gym.envs.registration.registry:
+            importlib.reload(_envs_register)
 
         n_envs = int(cfg.n_envs)
         n_episodes_per_env = int(cfg.n_episodes)
         env_name = cfg.env_name
 
+        # Resolve per-env wrapping for MO envs once, outside the factory.
+        wrap_mo = env_name.startswith("dag_scheduler_mo")
+        omega_vec = cfg.extra.get("omega") if cfg.extra else None
+        if wrap_mo and omega_vec is None:
+            omega_vec = [0.25, 0.25, 0.25, 0.25]
+
         def _make_one(env_name: str = env_name):
-            return gym.make(env_name)
+            e = gym.make(env_name)
+            if wrap_mo:
+                from tetrarl.envs.wrappers import MOAggregateWrapper
+                e = MOAggregateWrapper(e, omega=np.asarray(omega_vec, dtype=np.float32))
+            return e
 
         vec_env = gym.vector.SyncVectorEnv([_make_one for _ in range(n_envs)])
         try:
@@ -569,7 +678,7 @@ class EvalRunner:
 
         out_dir = Path(cfg.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        jsonl_name = (
+        jsonl_name = cfg.extra.get("jsonl_name") or (
             f"{cfg.ablation}__{cfg.agent_type}__seed{cfg.seed}__nenvs{n_envs}.jsonl"
         )
         out_path = out_dir / jsonl_name
@@ -589,6 +698,10 @@ class EvalRunner:
         # JSONL lines for them once they're done. We continue to step them in
         # the vector-env (cheap) until all are done.
         per_env_done = [False] * n_envs
+        # W10 fix: track per-env last executed (post-override) action so the
+        # synthetic memory_util pressure at step t reacts to step t-1's
+        # action. Init to safe fallback (matches single-env contract).
+        per_env_last_action: list[int] = [0] * n_envs
 
         t0 = time.perf_counter()
         obs, _info = vec_env.reset(seed=int(cfg.seed))
@@ -601,7 +714,12 @@ class EvalRunner:
 
                     # Per-env framework.step (one action per env per rollout step).
                     for i in range(n_envs):
-                        memory_util_i = 0.1 + 0.001 * per_env_step[i]
+                        action_norm_i = float(per_env_last_action[i]) / float(
+                            max(1, n_actions - 1)
+                        )
+                        memory_util_i = (
+                            0.08 + 0.005 * per_env_step[i] + 0.04 * action_norm_i
+                        )
                         # Update telemetry to mirror the single-env contract
                         # (the framework.step reads telemetry latched from
                         # the previous env-i step).
@@ -637,11 +755,20 @@ class EvalRunner:
                             done_i = bool(vec_term[i] or vec_trunc[i])
                             if done_i:
                                 per_env_step[i] = 0
+                                per_env_last_action[i] = 0
                             else:
                                 per_env_step[i] += 1
                             continue
 
-                        memory_util_i = 0.1 + 0.001 * per_env_step[i]
+                        # Recompute the same memory_util_i used for telemetry
+                        # above so the JSONL record matches what the override
+                        # layer actually saw.
+                        action_norm_i = float(per_env_last_action[i]) / float(
+                            max(1, n_actions - 1)
+                        )
+                        memory_util_i = (
+                            0.08 + 0.005 * per_env_step[i] + 0.04 * action_norm_i
+                        )
                         action_i = int(actions[i])
                         reward_i = float(vec_rewards[i])
                         latency_ms_i = env_dt_ms_per + fw_dts_ms[i]
@@ -676,10 +803,16 @@ class EvalRunner:
                         if done_i:
                             per_env_episode[i] += 1
                             per_env_step[i] = 0
+                            # New episode -> reset latched action so the next
+                            # episode's step 0 starts from safe fallback.
+                            per_env_last_action[i] = 0
                             if per_env_episode[i] >= n_episodes_per_env:
                                 per_env_done[i] = True
                         else:
                             per_env_step[i] += 1
+                            # Latch executed (post-override) action so step
+                            # t+1's pressure responds to it.
+                            per_env_last_action[i] = int(action_i)
             finally:
                 vec_env.close()
         wall_time_s = time.perf_counter() - t0

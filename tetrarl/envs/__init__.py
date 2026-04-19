@@ -1,5 +1,6 @@
 """Gymnasium environment wrappers for multi-objective reward augmentation."""
 
+from tetrarl.envs import _register  # noqa: F401  side-effect: register envs
 from tetrarl.envs.dag_scheduler import (  # noqa: F401
     DAGReadyMask,
     DAGSchedulerEnv,

@@ -53,6 +53,13 @@ runs/*
 !runs/w7_combined_cdf.svg
 !runs/w7_pareto_4d_mac/
 !runs/w7_pareto_4d_mac/**
+!runs/w10_orin_full/
+!runs/w10_orin_full/**
+# Only whitelist the per-omega winner Markdown report; the JSONL eval
+# logs themselves stay ignored (regenerable from the matrix YAML).
+!runs/w10_orin_full_fixed/
+runs/w10_orin_full_fixed/*
+!runs/w10_orin_full_fixed/per_omega_winner.md
 checkpoints/
 *.pth
 *.h5
