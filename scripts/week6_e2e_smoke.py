@@ -97,9 +97,16 @@ def _telemetry_to_hw(reading: _StubReading) -> HardwareTelemetry:
 def make_framework(
     n_actions: int = 2,
     seed: int = 0,
+    omega: Optional[np.ndarray] = None,
 ) -> tuple[TetraRLFramework, StubTelemetrySource, OverrideLayer]:
-    """Build a fully-wired TetraRLFramework for the smoke test."""
-    pref = StaticPreferencePlane(np.array([0.5, 0.5], dtype=np.float32))
+    """Build a fully-wired TetraRLFramework for the smoke test.
+
+    ``omega`` selects the static preference vector; defaults to
+    ``[0.5, 0.5]`` (the W6/W7 production preference).
+    """
+    if omega is None:
+        omega = np.array([0.5, 0.5], dtype=np.float32)
+    pref = StaticPreferencePlane(np.asarray(omega, dtype=np.float32))
     arbiter = RandomArbiter(n_actions=n_actions, seed=seed)
     rm = ResourceManager()
     override = OverrideLayer(

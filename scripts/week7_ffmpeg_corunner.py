@@ -26,6 +26,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
+
 # Make the repository root importable so we can pull in week6_e2e_smoke.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -40,8 +42,30 @@ from tetrarl.eval.ffmpeg_interference import (  # noqa: E402
     summarize,
 )
 
-
 _NEEDS_FFMPEG = {"720p", "1080p", "2K"}
+
+
+OMEGA_PRESETS: dict[str, np.ndarray] = {
+    "energy_corner": np.array([1.0, 0.0], dtype=np.float32),
+    "memory_corner": np.array([0.0, 1.0], dtype=np.float32),
+    "center": np.array([0.5, 0.5], dtype=np.float32),
+}
+
+
+def parse_omega_name(name: str) -> np.ndarray:
+    """Return the 2-D preset omega vector for ``name``.
+
+    Valid names: ``energy_corner``, ``memory_corner``, ``center`` (see
+    Week 9 multi-env design doc Section 6.1). Raises ``ValueError``
+    for any other input.
+    """
+    key = name.strip()
+    if key not in OMEGA_PRESETS:
+        raise ValueError(
+            f"unknown omega preset {name!r}; valid choices are "
+            f"{sorted(OMEGA_PRESETS)}"
+        )
+    return OMEGA_PRESETS[key].copy()
 
 
 def _parse_conditions(raw: str) -> list[str]:
@@ -62,6 +86,7 @@ def _run_one_condition(
     hw_decode: bool,
     out_dir: Path,
     seed: int,
+    omega: Optional[np.ndarray] = None,
 ) -> LatencyRecorder:
     """Run a single condition end-to-end, returning the recorder."""
     import gymnasium as gym  # lazy import keeps test collection fast
@@ -75,7 +100,7 @@ def _run_one_condition(
         env = gym.make("CartPole-v1")
         try:
             fw, _telemetry, _override = make_framework(
-                n_actions=int(env.action_space.n), seed=seed
+                n_actions=int(env.action_space.n), seed=seed, omega=omega
             )
             run_workload(fw, env, n_steps=n_steps, recorder=rec)
         finally:
@@ -119,7 +144,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         default=2.0,
         help="Seconds to sleep between conditions.",
     )
+    parser.add_argument(
+        "--omega",
+        type=str,
+        default=None,
+        help=(
+            "Optional preference vector preset name (one of: "
+            "energy_corner, memory_corner, center). When supplied, the "
+            "framework's StaticPreferencePlane is set accordingly so the "
+            "per-omega CDF figure can be populated. Default: keep the "
+            "make_framework default of [0.5, 0.5]."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    omega = parse_omega_name(args.omega) if args.omega is not None else None
 
     conditions = _parse_conditions(args.conditions)
 
@@ -151,6 +190,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"n_steps         : {args.n_steps}")
     print(f"Video path      : {args.video!r}")
     print(f"hw_decode       : {args.hw_decode}")
+    print(f"Omega           : {args.omega!r}")
 
     results: dict[str, LatencyRecorder] = {}
     for i, cond in enumerate(conditions):
@@ -163,6 +203,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             hw_decode=args.hw_decode,
             out_dir=out_dir,
             seed=args.seed,
+            omega=omega,
         )
         dt = time.perf_counter() - t0
         if rec.samples_ms:
