@@ -23,7 +23,7 @@ from tetrarl.morl.agents import pd_morl
 from tetrarl.morl import operators, preference_sampling
 from tetrarl.envs.dst import DeepSeaTreasure
 from tetrarl.eval import hypervolume, tail_latency
-from tetrarl.sys import tegrastats_daemon, dvfs_controller, override_layer
+from tetrarl.sys import tegra_daemon, dvfs, override_layer
 print('All imports OK')
 " 2>&1 | tee "${OUT_DIR}/imports.log"
 
