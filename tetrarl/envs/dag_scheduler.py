@@ -3,8 +3,16 @@
 A small Gymnasium env designed to validate the GCN feature extractor in
 `tetrarl/morl/native/gnn_extractor.py`. Observations are graph-structured
 (node features + edge index + ready mask), actions pick which task to
-schedule next, and the reward is a 3-vector
-``[throughput, -energy, -peak_memory_increment]``.
+schedule next, and the reward is by default a 4-vector
+``[throughput, -energy_step, -peak_memory_delta, -energy_normalized_step]``.
+
+The 4th component is the per-step energy contribution
+``(task_compute_cost * dvfs_scaling_factor) / max_energy`` (negated), where
+``max_energy`` is the maximum cumulative energy possible in the episode at
+``dvfs=1.0`` (i.e. the sum of all task compute costs). Summing the 4th
+component over a full episode at ``dvfs=1.0`` therefore yields exactly
+``-1.0``. A backward-compat constructor flag ``reward_dim=3`` drops the
+4th component for legacy callers.
 
 Topology generation follows a simple Erdos-Renyi style rule on a
 topologically-ordered node set: for every ordered pair (u, v) with u < v,
@@ -72,7 +80,9 @@ class DAGSchedulerEnv(gym.Env):
     cumulative live memory crosses a new high-water mark. Invalid actions
     are no-ops that still consume a step.
 
-    Reward vector layout: ``[throughput, -energy, -peak_memory_delta]``.
+    Reward vector layout (default ``reward_dim=4``):
+    ``[throughput, -energy_step, -peak_memory_delta, -energy_normalized_step]``.
+    With ``reward_dim=3`` the 4th component is dropped for backward compat.
     """
 
     metadata = {"render_modes": []}
@@ -83,14 +93,22 @@ class DAGSchedulerEnv(gym.Env):
         density: float = 0.3,
         max_steps: int | None = None,
         seed: int = 0,
+        *,
+        reward_dim: int = 4,
+        dvfs_scaling_factor: float = 1.0,
     ) -> None:
         super().__init__()
         if n_tasks <= 0:
             raise ValueError("n_tasks must be positive")
+        if reward_dim not in (3, 4):
+            raise ValueError("reward_dim must be 3 or 4")
+        if dvfs_scaling_factor <= 0:
+            raise ValueError("dvfs_scaling_factor must be > 0")
         self.n_tasks = int(n_tasks)
         self.density = float(density)
         self.max_steps = int(max_steps) if max_steps is not None else 4 * self.n_tasks
-        self.reward_dim = 3
+        self.reward_dim = int(reward_dim)
+        self.dvfs_scaling_factor = float(dvfs_scaling_factor)
 
         self.e_max = self.n_tasks * (self.n_tasks - 1) // 2
 
@@ -133,6 +151,7 @@ class DAGSchedulerEnv(gym.Env):
         self._done_mask: np.ndarray = np.zeros(self.n_tasks, dtype=bool)
         self._step_count: int = 0
         self._peak_mem: float = 0.0
+        self._max_energy: float = 0.0
 
     # ------------------------------------------------------------------
     # Gymnasium API
@@ -153,6 +172,7 @@ class DAGSchedulerEnv(gym.Env):
         self._done_mask = np.zeros(self.n_tasks, dtype=bool)
         self._step_count = 0
         self._peak_mem = 0.0
+        self._max_energy = float(self._node_costs[:, 0].sum())
         return self._get_obs(), {}
 
     def step(
@@ -162,10 +182,11 @@ class DAGSchedulerEnv(gym.Env):
         valid = self._compute_valid_mask()
 
         if not (0 <= action < self.n_tasks) or not bool(valid[action]):
-            reward_vec = np.zeros(3, dtype=np.float32)
+            reward_vec = np.zeros(self.reward_dim, dtype=np.float32)
         else:
             self._done_mask[action] = True
-            energy_delta = -float(self._node_costs[action, 0])
+            compute_cost = float(self._node_costs[action, 0])
+            energy_delta = -compute_cost
             current_mem = float(self._node_costs[self._done_mask, 1].sum())
             prior_peak = self._peak_mem
             if current_mem > prior_peak:
@@ -173,9 +194,13 @@ class DAGSchedulerEnv(gym.Env):
                 self._peak_mem = current_mem
             else:
                 memory_delta = 0.0
-            reward_vec = np.asarray(
-                [1.0, energy_delta, memory_delta], dtype=np.float32
-            )
+            # Defensive zero-division guard: degenerate DAGs may have zero cost.
+            if self._max_energy > 0.0:
+                energy_norm_delta = -(compute_cost * self.dvfs_scaling_factor) / self._max_energy
+            else:
+                energy_norm_delta = 0.0
+            full_vec = [1.0, energy_delta, memory_delta, energy_norm_delta]
+            reward_vec = np.asarray(full_vec[: self.reward_dim], dtype=np.float32)
 
         self._step_count += 1
         terminated = bool(self._done_mask.all())
