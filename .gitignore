@@ -53,6 +53,8 @@ runs/*
 !runs/w7_combined_cdf.svg
 !runs/w7_pareto_4d_mac/
 !runs/w7_pareto_4d_mac/**
+!runs/w10_orin_full/
+!runs/w10_orin_full/**
 checkpoints/
 *.pth
 *.h5

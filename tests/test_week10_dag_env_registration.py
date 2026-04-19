@@ -65,12 +65,13 @@ def test_eval_runner_can_make_dag_env_without_explicit_envs_import(tmp_path):
     # Force-clear the registry to simulate a fresh process. (We re-add
     # by re-importing tetrarl.envs at the end so other tests are
     # unaffected.)
+
     import gymnasium
-    import importlib
     if "dag_scheduler_mo-v0" in gymnasium.envs.registration.registry:
         del gymnasium.envs.registration.registry["dag_scheduler_mo-v0"]
 
     from pathlib import Path
+
     from tetrarl.eval.runner import EvalConfig, EvalRunner
     cfg = EvalConfig(
         env_name="dag_scheduler_mo-v0",
