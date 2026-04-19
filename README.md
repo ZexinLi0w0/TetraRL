@@ -193,8 +193,8 @@ TetraRL/
 │   │   └── operators.py               # Cosine-similarity envelope operator
 │   ├── sys/                           # System layer (DVFS, tegrastats, override)
 │   │   ├── __init__.py
-│   │   ├── tegrastats_daemon.py       # Async tegrastats sensor daemon
-│   │   ├── dvfs_controller.py         # DVFS frequency controller
+│   │   ├── tegra_daemon.py            # Async tegrastats sensor daemon (100Hz/10Hz, EMA filter)
+│   │   ├── dvfs.py                    # DVFS frequency controller (Orin AGX, stub mode for dev)
 │   │   └── override_layer.py          # Hardware-emergency override
 │   ├── eval/                          # Evaluation utilities (HV, Pareto, CDF)
 │   │   ├── __init__.py

@@ -44,7 +44,7 @@ jobs:
         run: |
           python -c "import tetrarl"
           python -c "from tetrarl.morl import pd_morl, operators"
-          python -c "from tetrarl.sys import tegrastats_daemon, dvfs_controller, override_layer"
+          python -c "from tetrarl.sys import tegra_daemon, dvfs, override_layer"
           python -c "from tetrarl.eval import hypervolume, tail_latency"
 
   mypy:
