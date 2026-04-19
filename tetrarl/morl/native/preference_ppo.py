@@ -27,6 +27,11 @@ from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
 
 from tetrarl.eval.hypervolume import hypervolume, pareto_filter
+from tetrarl.morl.native.masking import ActionMask, apply_logit_mask
+from tetrarl.morl.native.override import (
+    HardwareTelemetry,
+    OverrideLayer,
+)
 from tetrarl.morl.preference_sampling import (
     sample_anchor_preferences,
     sample_preference,
@@ -83,7 +88,12 @@ class PreferencePPOConfig:
 
 
 class PreferenceNetwork(nn.Module):
-    """Actor-critic conditioned on (observation, preference vector)."""
+    """Actor-critic conditioned on (observation, preference vector).
+
+    Optionally accepts an action mask (applied to discrete logits) and a
+    GNN feature extractor (replaces the flat observation with a graph-level
+    embedding before concatenating with the preference vector).
+    """
 
     def __init__(
         self,
@@ -92,13 +102,29 @@ class PreferenceNetwork(nn.Module):
         pref_dim: int,
         hidden_dim: int = 64,
         continuous: bool = False,
+        *,
+        action_mask: ActionMask | None = None,
+        gnn_extractor: nn.Module | None = None,
     ):
         super().__init__()
-        input_dim = obs_dim + pref_dim
         self.continuous = continuous
         self.obs_dim = obs_dim
         self.act_dim = act_dim
         self.pref_dim = pref_dim
+        self.action_mask = action_mask
+        self.gnn_extractor = gnn_extractor
+
+        # When a GNN extractor is supplied, the MLP heads consume
+        # (gnn_out_dim + pref_dim,). Otherwise they consume (obs_dim + pref_dim,).
+        if gnn_extractor is not None:
+            gnn_out_dim = int(getattr(gnn_extractor, "out_dim"))
+            feat_dim = gnn_out_dim
+            self.expects_graph = True
+        else:
+            feat_dim = obs_dim
+            self.expects_graph = False
+        input_dim = feat_dim + pref_dim
+        self._feat_dim = feat_dim
 
         self.critic = nn.Sequential(
             layer_init(nn.Linear(input_dim, hidden_dim)),
@@ -130,9 +156,13 @@ class PreferenceNetwork(nn.Module):
         return self.critic(obs_aug)
 
     def get_action_and_value(
-        self, obs_aug: torch.Tensor, action: torch.Tensor | None = None
+        self,
+        obs_aug: torch.Tensor,
+        action: torch.Tensor | None = None,
+        mask: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.continuous:
+            # Continuous branch: mask is not applicable; ignored silently.
             action_mean = self.actor_mean(obs_aug)
             action_logstd = self.actor_logstd.expand_as(action_mean)
             action_std = torch.exp(action_logstd)
@@ -147,6 +177,8 @@ class PreferenceNetwork(nn.Module):
             )
         else:
             logits = self.actor_logits(obs_aug)
+            if mask is not None:
+                logits = apply_logit_mask(logits, mask)
             probs = Categorical(logits=logits)
             if action is None:
                 action = probs.sample()
@@ -158,12 +190,18 @@ class PreferenceNetwork(nn.Module):
             )
 
     def get_deterministic_action(
-        self, obs_aug: torch.Tensor
+        self,
+        obs_aug: torch.Tensor,
+        mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if self.continuous:
+            # Continuous branch: mask is not applicable; ignored silently.
             return self.actor_mean(obs_aug)
         else:
-            return self.actor_logits(obs_aug).argmax(-1)
+            logits = self.actor_logits(obs_aug)
+            if mask is not None:
+                logits = apply_logit_mask(logits, mask)
+            return logits.argmax(-1)
 
 
 def evaluate_policy(
@@ -173,11 +211,17 @@ def evaluate_policy(
     n_episodes: int = 3,
     device: str | torch.device = "cpu",
     deterministic: bool = True,
+    mask_fn: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> np.ndarray:
     """Evaluate current policy at a specific preference vector.
 
+    Optionally accepts a `mask_fn(obs) -> bool ndarray` (applied to the raw
+    obs, not obs_aug). Continuous action spaces ignore the mask.
+
     Returns the mean multi-objective return across episodes.
     """
+    discrete = isinstance(env.action_space, gym.spaces.Discrete)
+    act_dim = env.action_space.n if discrete else None
     all_returns: list[np.ndarray] = []
     for _ in range(n_episodes):
         obs, _ = env.reset()
@@ -186,12 +230,23 @@ def evaluate_policy(
         while not done:
             obs_aug = np.concatenate([obs, omega]).astype(np.float32)
             obs_t = torch.from_numpy(obs_aug).unsqueeze(0).to(device)
+            mask_t: torch.Tensor | None = None
+            if mask_fn is not None and discrete:
+                m = np.asarray(mask_fn(obs), dtype=bool)
+                mask_t = (
+                    torch.as_tensor(m, dtype=torch.bool, device=device)
+                    .unsqueeze(0)
+                )
             with torch.no_grad():
                 if deterministic:
-                    action = network.get_deterministic_action(obs_t)
+                    action = network.get_deterministic_action(
+                        obs_t, mask=mask_t
+                    )
                 else:
-                    action, _, _, _ = network.get_action_and_value(obs_t)
-            if isinstance(env.action_space, gym.spaces.Discrete):
+                    action, _, _, _ = network.get_action_and_value(
+                        obs_t, mask=mask_t
+                    )
+            if discrete:
                 act = int(action.item())
             else:
                 act = action.squeeze(0).cpu().numpy()
@@ -216,11 +271,24 @@ def train_preference_ppo(
     env_fn: Callable[[], gym.Env],
     device: str | torch.device = "cpu",
     verbose: bool = True,
+    *,
+    mask: ActionMask | None = None,
+    override: OverrideLayer | None = None,
+    telemetry_fn: Callable[[], HardwareTelemetry] | None = None,
+    gnn_extractor: nn.Module | None = None,
 ) -> dict[str, Any]:
     """Run preference-conditioned PPO training.
 
+    Optional extensions (default-OFF for backward compat):
+      * mask: ActionMask -- per-step discrete-action mask applied to logits.
+      * override: OverrideLayer + telemetry_fn -- swap env-step action with
+        a safe fallback when telemetry violates thresholds. Policy gradient
+        is unaffected (the policy's proposed action and logprob are still
+        what gets stored and trained on).
+      * gnn_extractor: nn.Module -- forwarded to PreferenceNetwork.
+
     Returns dict with keys: network, pareto_front, hv_history,
-    best_hv, global_step, config.
+    best_hv, global_step, config, override_fire_count.
     """
     rng = np.random.default_rng(config.seed)
     torch.manual_seed(config.seed)
@@ -235,8 +303,22 @@ def train_preference_ppo(
     n_obj = config.n_objectives
 
     network = PreferenceNetwork(
-        obs_dim, act_dim, n_obj, config.hidden_dim, continuous
+        obs_dim,
+        act_dim,
+        n_obj,
+        config.hidden_dim,
+        continuous,
+        gnn_extractor=gnn_extractor,
     ).to(device)
+    if gnn_extractor is not None:
+        raise NotImplementedError(
+            "GNN feature extractor is wired into PreferenceNetwork but the "
+            "current rollout still produces flat observations (obs_dim + "
+            "pref_dim). Training with gnn_extractor requires a graph-aware "
+            "env that yields (node_features, edge_index, batch). "
+            "tetrarl/morl/native/gnn_extractor.py is fully unit-tested as a "
+            "standalone module; integration with a graph env is Week 5+ scope."
+        )
     optimizer = optim.Adam(network.parameters(), lr=config.lr, eps=1e-5)
 
     # Rollout buffers
@@ -254,6 +336,17 @@ def train_preference_ppo(
     reward_buf = torch.zeros(config.num_steps, device=device)
     done_buf = torch.zeros(config.num_steps, device=device)
     value_buf = torch.zeros(config.num_steps, device=device)
+
+    # Mask buffer is allocated only when masking is active for a discrete env.
+    use_mask = (mask is not None) and (not continuous)
+    mask_buf: torch.Tensor | None = None
+    if use_mask:
+        mask_buf = torch.zeros(
+            (config.num_steps, act_dim), dtype=torch.bool, device=device
+        )
+
+    use_override = override is not None and telemetry_fn is not None
+    override_fire_count = 0
 
     obs, _ = env.reset(seed=config.seed)
     omega = sample_preference(n_obj, 1, rng=rng)[0]
@@ -281,10 +374,16 @@ def train_preference_ppo(
             obs_buf[step] = torch.from_numpy(obs_aug).to(device)
             done_buf[step] = next_done
 
+            mask_t: torch.Tensor | None = None
+            if use_mask:
+                m = mask.as_tensor(obs, act_dim, device=device)
+                mask_buf[step] = m
+                mask_t = m.unsqueeze(0)
+
             with torch.no_grad():
                 obs_t = obs_buf[step].unsqueeze(0)
                 action, logprob, _, value = (
-                    network.get_action_and_value(obs_t)
+                    network.get_action_and_value(obs_t, mask=mask_t)
                 )
                 value_buf[step] = value.flatten()[0]
 
@@ -296,8 +395,18 @@ def train_preference_ppo(
             else:
                 action_np = int(action.item())
 
+            # Hardware override: substitute the env-step action with a
+            # safe fallback while still training on the policy's choice.
+            step_action = action_np
+            if use_override:
+                tele = telemetry_fn()
+                override_fired, fallback = override.step(tele)
+                if override_fired:
+                    override_fire_count += 1
+                    step_action = fallback
+
             next_obs, reward_vec, terminated, truncated, _ = env.step(
-                action_np
+                step_action
             )
             done = terminated or truncated
 
@@ -357,9 +466,14 @@ def train_preference_ppo(
                 end = start + config.minibatch_size
                 mb_inds = b_inds[start:end]
 
+                mb_mask = (
+                    mask_buf[mb_inds] if mask_buf is not None else None
+                )
                 _, newlogprob, entropy, newvalue = (
                     network.get_action_and_value(
-                        obs_buf[mb_inds], act_buf[mb_inds]
+                        obs_buf[mb_inds],
+                        act_buf[mb_inds],
+                        mask=mb_mask,
                     )
                 )
                 logratio = newlogprob - logprob_buf[mb_inds]
@@ -471,7 +585,8 @@ def train_preference_ppo(
                     f"step={global_step} HV={hv:.2f} |PF|={len(pf)} "
                     f"pg={pg_loss.item():.4f} "
                     f"vl={v_loss.item():.4f} "
-                    f"SPS={sps}"
+                    f"SPS={sps} "
+                    f"override_fires={override_fire_count}"
                 )
 
     env.close()
@@ -487,4 +602,5 @@ def train_preference_ppo(
         "best_hv": best_hv,
         "global_step": global_step,
         "config": config,
+        "override_fire_count": override_fire_count,
     }
