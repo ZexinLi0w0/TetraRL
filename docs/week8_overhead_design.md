@@ -164,10 +164,15 @@ sanity check, not as the denominator for a percentage claim.
 - The per-component timings here are bare-python-object overhead. On a Mac dev box with
   `vm_stat` shell-out for telemetry, `tegra_daemon_sample` distorts (the subprocess fork
   dominates); the Mac smoke pass is intentionally not part of the paper numbers.
-- The DVFS controller in this measurement is the stub (`--no-real-dvfs`). A real sysfs write would
-  add ~10–100 microseconds depending on governor + write-amplification; userspace-governor +
-  single-write should sit at the low end of that range. Validating this on Orin Nano with sudo +
-  `governor=userspace` is deferred to Week 9 (see the `orin_dvfs_root` memory note).
+- The DVFS controller in this measurement is the stub (default; pass `--allow-real-dvfs` to hit
+  real sysfs). A real sysfs write would add ~10–100 microseconds depending on governor +
+  write-amplification; userspace-governor + single-write should sit at the low end of that range.
+  The W8 spec STOP_PRESS unblocked the permissions side (sudo password is known and the script
+  now ships `--restore-governor` for post-run cleanup), but the actual `--allow-real-dvfs` Nano
+  pass for this PR is deferred: the lab bastion was unreachable (SSH timeout to both `nano2` and
+  `orin1`) at finalize time. The numbers in this doc are the stub-DVFS pass; re-run with
+  `--allow-real-dvfs --restore-governor` once the lab is back to replace the `dvfs_controller_set`
+  row.
 - The single-task LAG case is the limit covered here. Multi-corunner LAG validation (the case
   NeuOS actually targets) requires the concurrent FFmpeg/co-runner harness; Week 7 PR #18 / #19
   lays the groundwork but the LAG-feature integration with concurrent corunners is left for W9+.
@@ -177,15 +182,16 @@ sanity check, not as the denominator for a percentage claim.
 Two-pass workflow used to generate the artifacts cited above:
 
 ```
-# Pass 1: per-component memory + RSS deltas (use these for mem_mb / rss_mb columns)
+# Pass 1: per-component memory + RSS deltas (use these for mem_mb / rss_mb columns).
+# Default DVFS mode is stub; add --allow-real-dvfs --restore-governor for real sysfs.
 python scripts/week8_overhead_nano.py --n-steps 5000 \
     --out-dir runs/w8_overhead_nano/ \
-    --no-real-dvfs --with-lag-feature --no-strict --effort max
+    --with-lag-feature --no-strict --effort max
 
 # Pass 2: clean wall-clock pass (use these for *_ms columns)
 python scripts/week8_overhead_nano.py --n-steps 5000 \
     --out-dir runs/w8_overhead_nano_notrace/ \
-    --no-real-dvfs --with-lag-feature --no-strict --no-track-memory \
+    --with-lag-feature --no-strict --no-track-memory \
     --effort max
 ```
 
