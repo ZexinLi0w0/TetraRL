@@ -26,6 +26,7 @@ import json
 import random
 import sys
 import time
+import warnings
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -313,7 +314,24 @@ def _make_telemetry(platform: str) -> tuple[Any, Callable[[Any], HardwareTelemet
     Only the Mac stub path is exercised by the unit tests; Jetson
     builds out a real :class:`TegrastatsDaemon`-backed source in the
     physical eval scripts.
+
+    Note: when ``platform`` starts with ``"orin_"`` we still return the
+    Mac stub here (the real tegrastats daemon lives in the
+    platform-specific scripts under ``scripts/`` because it requires the
+    ``tegrastats`` binary present only on Jetson). A
+    :class:`RuntimeWarning` is emitted so the eval harness does not
+    silently lie about its telemetry source — this closes the W8 hidden
+    bug where Orin runs were quietly using synthetic data.
     """
+    if platform.startswith("orin_"):
+        warnings.warn(
+            f"_make_telemetry() called with platform={platform!r} but the "
+            "real tegrastats daemon is not wired up here; falling back to "
+            "the Mac stub. Real-Orin runs should use the platform-specific "
+            "scripts that build a TegrastatsDaemon directly.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     if platform == "mac_stub":
         return _MacStubTelemetry(initial_energy_j=1000.0), _telemetry_to_hw
     # Default to the stub for any unrecognised platform — the physical

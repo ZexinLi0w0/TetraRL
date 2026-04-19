@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,7 @@ from tetrarl.eval.runner import (
     EvalConfig,
     EvalRunner,
     RunResult,
+    _make_telemetry,
     load_sweep_yaml,
 )
 from tetrarl.morl.native.override import HardwareTelemetry
@@ -241,3 +243,38 @@ def test_out_dir_created_if_missing(tmp_path):
     assert out_dir.exists()
     jsonl_files = list(out_dir.glob("*.jsonl"))
     assert len(jsonl_files) >= 1
+
+
+def test_make_telemetry_orin_agx_warns_about_stub_fallback():
+    """W9 Task A: orin_agx must emit a WARN when the harness silently
+    falls back to the Mac stub instead of wiring up a real tegrastats
+    daemon. The function still returns the Mac stub source (behaviour
+    preserved), but the user is now told the truth."""
+    with pytest.warns(RuntimeWarning) as record:
+        source, adapter = _make_telemetry("orin_agx")
+    assert len(record) == 1
+    msg = str(record[0].message).lower()
+    assert "orin" in msg
+    assert "stub" in msg
+    # Behaviour preserved: still returns the Mac stub source.
+    assert source.__class__.__name__ == "_MacStubTelemetry"
+
+
+def test_make_telemetry_orin_nano_also_warns_about_stub_fallback():
+    """Both orin_* variants must trigger the W9 stub-fallback WARN."""
+    with pytest.warns(RuntimeWarning) as record:
+        source, adapter = _make_telemetry("orin_nano")
+    assert len(record) == 1
+    msg = str(record[0].message).lower()
+    assert "orin" in msg
+    assert "stub" in msg
+    assert source.__class__.__name__ == "_MacStubTelemetry"
+
+
+def test_make_telemetry_mac_stub_does_not_warn():
+    """The legitimate mac_stub path must remain warning-free so the
+    eval harness on developer laptops stays quiet."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        source, adapter = _make_telemetry("mac_stub")
+    assert source.__class__.__name__ == "_MacStubTelemetry"
