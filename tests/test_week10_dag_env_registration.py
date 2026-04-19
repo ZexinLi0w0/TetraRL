@@ -56,3 +56,33 @@ def test_mo_aggregate_wrapper_omega_zero_corner_zeros_reward():
     obs, _info = wrapped.reset(seed=0)
     obs, reward, term, trunc, info = wrapped.step(0)
     np.testing.assert_allclose(reward, float(info["reward_vec"][1]))
+
+
+def test_eval_runner_can_make_dag_env_without_explicit_envs_import(tmp_path):
+    """The runner must trigger env registration on its own — callers
+    using only the runner CLI must not need to manually import
+    tetrarl.envs."""
+    # Force-clear the registry to simulate a fresh process. (We re-add
+    # by re-importing tetrarl.envs at the end so other tests are
+    # unaffected.)
+    import gymnasium
+    import importlib
+    if "dag_scheduler_mo-v0" in gymnasium.envs.registration.registry:
+        del gymnasium.envs.registration.registry["dag_scheduler_mo-v0"]
+
+    from pathlib import Path
+    from tetrarl.eval.runner import EvalConfig, EvalRunner
+    cfg = EvalConfig(
+        env_name="dag_scheduler_mo-v0",
+        agent_type="random",
+        ablation="none",
+        platform="orin_agx",
+        n_episodes=1,
+        seed=0,
+        out_dir=Path(tmp_path),
+        extra={"omega": [0.25, 0.25, 0.25, 0.25]},
+    )
+    runner = EvalRunner()
+    runner.run(cfg)
+    # Restore registry state for downstream tests.
+    import tetrarl.envs  # noqa: F401
