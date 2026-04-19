@@ -456,12 +456,14 @@ class EvalRunner:
         through :meth:`_run_vec_env` which wraps a ``gym.vector.SyncVectorEnv``
         and emits one JSONL line per ``(env_id, episode, step)`` tuple.
         """
-        import gymnasium as gym  # lazy: keeps test collection cheap
-        import tetrarl.envs  # noqa: F401  side-effect: registers dag_scheduler_mo-v0
         # Re-trigger registration in case the gymnasium registry was cleared
         # after tetrarl.envs was first imported (e.g. by a fresh-process test
         # harness). The _register module body is idempotent.
         import importlib
+
+        import gymnasium as gym  # lazy: keeps test collection cheap
+
+        import tetrarl.envs  # noqa: F401  side-effect: registers dag_scheduler_mo-v0
         from tetrarl.envs import _register as _envs_register
         if "dag_scheduler_mo-v0" not in gym.envs.registration.registry:
             importlib.reload(_envs_register)
@@ -600,12 +602,14 @@ class EvalRunner:
         becomes the per-env episode cap, so the returned ``RunResult.n_episodes``
         reports ``cfg.n_envs * cfg.n_episodes``.
         """
-        import gymnasium as gym  # lazy: keeps test collection cheap
-        import tetrarl.envs  # noqa: F401  side-effect: registers dag_scheduler_mo-v0
         # Re-trigger registration in case the gymnasium registry was cleared
         # after tetrarl.envs was first imported. The _register module is
         # idempotent.
         import importlib
+
+        import gymnasium as gym  # lazy: keeps test collection cheap
+
+        import tetrarl.envs  # noqa: F401  side-effect: registers dag_scheduler_mo-v0
         from tetrarl.envs import _register as _envs_register
         if "dag_scheduler_mo-v0" not in gym.envs.registration.registry:
             importlib.reload(_envs_register)
