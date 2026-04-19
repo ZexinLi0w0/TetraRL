@@ -10,7 +10,7 @@
 
 | Dependency | Status | Affected Weeks | Mitigation |
 |---|---|---|---|
-| **DonkeyCar simulator** (gym-donkeycar + Unity DonkeySim) | ⚠️ **Blocked** — requires external x86 PC with discrete GPU; not available now | W7, W9, W10 (originally) | Substitute with **DAG-scheduler-MO env** (W4-bonus) + **PyBullet-HalfCheetah** as the closed-loop targets. DonkeyCar runs added retroactively whenever the external PC is provisioned. Not on critical path. |
+| **DonkeyCar simulator family** (gym-donkeycar + Unity DonkeySim binary) — includes **all DonkeyCar-derived experiments** (e.g. DonkeyCar-SAC, DonkeyCar-PPO, C-MORL/DonkeyCar) | ⚠️ **Blocked** — requires external x86 PC with discrete GPU to host the Unity sim; not available now (and it is uncertain whether SAC-on-DonkeyCar specifically can also be made to run even once the PC is provisioned) | W7, W9, W10 (originally) | Substitute with **DAG-scheduler-MO env** (W4-bonus) + **PyBullet-HalfCheetah** as the closed-loop targets. Any DonkeyCar variant is added retroactively only if/when both the external PC is provisioned **and** the SAC-on-DonkeyCar pipeline is verified to run end-to-end. Not on critical path. |
 | **Xavier NX hardware** | ❌ **Removed** from plan (hardware unavailable) | W7, W9, W10 (originally) | Multi-platform scope reduced to **Orin AGX + Jetson Nano** only. |
 | **Jetson Nano** | ✅ Available | W7 (Track B), W9, W10 | Standard porting workflow; sysfs paths differ from Orin (allow ~1 day buffer). |
 | **Orin AGX** | ✅ Available | W5–12 | Primary target platform. |
