@@ -1,0 +1,16 @@
+env_name,agent_type,ablation,platform,seed,n_episodes,n_steps,mean_reward,override_fire_count,tail_p99_ms,mean_energy_j,mean_memory_util,wall_time_s
+CartPole-v1,preference_ppo,none,orin_agx,0,200,3079,1.000000,55,0.010870,0.001294,0.108610,0.058647
+CartPole-v1,preference_ppo,none,orin_agx,1,200,3149,1.000000,41,0.009939,0.001293,0.108741,0.042638
+CartPole-v1,preference_ppo,none,orin_agx,2,200,3140,1.000000,57,0.009208,0.001300,0.108668,0.041770
+CartPole-v1,preference_ppo,preference_plane,orin_agx,0,200,4523,1.000000,298,0.010209,0.001465,0.112872,0.060738
+CartPole-v1,preference_ppo,preference_plane,orin_agx,1,200,4426,1.000000,344,0.010500,0.001454,0.112979,0.060068
+CartPole-v1,preference_ppo,preference_plane,orin_agx,2,200,4115,1.000000,232,0.010000,0.001469,0.111873,0.055386
+CartPole-v1,preference_ppo,resource_manager,orin_agx,0,200,3079,1.000000,55,0.009593,0.001294,0.108610,0.041266
+CartPole-v1,preference_ppo,resource_manager,orin_agx,1,200,3149,1.000000,41,0.011646,0.001293,0.108741,0.043531
+CartPole-v1,preference_ppo,resource_manager,orin_agx,2,200,3140,1.000000,57,0.010084,0.001300,0.108668,0.043877
+CartPole-v1,preference_ppo,rl_arbiter,orin_agx,0,200,4127,1.000000,258,0.008500,0.001473,0.112071,0.050570
+CartPole-v1,preference_ppo,rl_arbiter,orin_agx,1,200,4325,1.000000,337,0.009667,0.001467,0.112772,0.052795
+CartPole-v1,preference_ppo,rl_arbiter,orin_agx,2,200,4342,1.000000,283,0.008542,0.001474,0.112512,0.052491
+CartPole-v1,preference_ppo,override_layer,orin_agx,0,200,3123,1.000000,0,0.009366,0.001299,0.109403,0.041519
+CartPole-v1,preference_ppo,override_layer,orin_agx,1,200,3130,1.000000,0,0.009417,0.001298,0.108577,0.042056
+CartPole-v1,preference_ppo,override_layer,orin_agx,2,200,3154,1.000000,0,0.009375,0.001304,0.108722,0.042385
