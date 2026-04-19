@@ -67,6 +67,10 @@ class EvalConfig:
     seed: int
     out_dir: Path
     extra: dict = field(default_factory=dict)
+    # W9: number of parallel envs in a SyncVectorEnv. n_envs=1 keeps the
+    # legacy single-env path byte-for-byte identical; n_envs > 1 routes
+    # through the vector branch in EvalRunner.run().
+    n_envs: int = 1
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +82,7 @@ class EvalConfig:
             "seed": int(self.seed),
             "out_dir": str(self.out_dir),
             "extra": dict(self.extra),
+            "n_envs": int(self.n_envs),
         }
 
     @classmethod
@@ -91,6 +96,7 @@ class EvalConfig:
             seed=int(d["seed"]),
             out_dir=Path(d["out_dir"]),
             extra=dict(d.get("extra") or {}),
+            n_envs=int(d.get("n_envs", 1)),
         )
 
     def to_yaml(self, path: Path) -> None:
@@ -362,6 +368,24 @@ def load_sweep_yaml(path: Path) -> list[EvalConfig]:
 # -----------------------------------------------------------------------------
 
 
+def _aggregate_metrics(
+    latencies: list[float],
+    energies: list[float],
+    memory_utils: list[float],
+    rewards: list[float],
+) -> tuple[float, float, float, float]:
+    """Aggregate per-step samples into (tail_p99_ms, mean_energy_j,
+    mean_memory_util, mean_reward). Empty lists collapse to 0.0.
+
+    Shared by both single-env and vector-env paths in :class:`EvalRunner`.
+    """
+    tail_p99_ms = float(np.percentile(latencies, 99)) if latencies else 0.0
+    mean_energy_j = float(np.mean(energies)) if energies else 0.0
+    mean_memory_util = float(np.mean(memory_utils)) if memory_utils else 0.0
+    mean_reward = float(np.mean(rewards)) if rewards else 0.0
+    return tail_p99_ms, mean_energy_j, mean_memory_util, mean_reward
+
+
 class EvalRunner:
     """Executes one or more :class:`EvalConfig` runs against a Gym env."""
 
@@ -390,13 +414,22 @@ class EvalRunner:
         )
 
     def run(self, cfg: EvalConfig) -> RunResult:
-        """Execute ``cfg.n_episodes`` and return aggregated metrics."""
+        """Execute ``cfg.n_episodes`` and return aggregated metrics.
+
+        For ``cfg.n_envs == 1`` (the default), uses the original single-env
+        path with ``gym.make(cfg.env_name)``. For ``cfg.n_envs > 1``, routes
+        through :meth:`_run_vec_env` which wraps a ``gym.vector.SyncVectorEnv``
+        and emits one JSONL line per ``(env_id, episode, step)`` tuple.
+        """
         import gymnasium as gym  # lazy: keeps test collection cheap
 
         # Reset RNGs INSIDE run() so two separate EvalRunner instances
         # produce identical reward sequences for the same seed.
         np.random.seed(int(cfg.seed))
         random.seed(int(cfg.seed))
+
+        if int(cfg.n_envs) > 1:
+            return self._run_vec_env(cfg)
 
         env = gym.make(cfg.env_name)
         try:
@@ -484,16 +517,179 @@ class EvalRunner:
                 env.close()
         wall_time_s = time.perf_counter() - t0
 
-        tail_p99_ms = float(np.percentile(latencies, 99)) if latencies else 0.0
-        mean_energy_j = float(np.mean(energies)) if energies else 0.0
-        mean_memory_util = float(np.mean(memory_utils)) if memory_utils else 0.0
-        mean_reward = float(np.mean(rewards)) if rewards else 0.0
+        tail_p99_ms, mean_energy_j, mean_memory_util, mean_reward = _aggregate_metrics(
+            latencies, energies, memory_utils, rewards
+        )
         override_fire_count = int(getattr(framework.override_layer, "fire_count", 0))
 
         return RunResult(
             config=cfg.to_dict(),
             n_steps=int(n_steps),
             n_episodes=int(cfg.n_episodes),
+            hv=None,
+            tail_p99_ms=tail_p99_ms,
+            mean_energy_j=mean_energy_j,
+            mean_memory_util=mean_memory_util,
+            mean_reward=mean_reward,
+            override_fire_count=override_fire_count,
+            oom_events=int(oom_events),
+            wall_time_s=float(wall_time_s),
+        )
+
+    def _run_vec_env(self, cfg: EvalConfig) -> RunResult:
+        """W9: vector-env rollout for ``cfg.n_envs > 1``.
+
+        Builds a :class:`gymnasium.vector.SyncVectorEnv` of size ``cfg.n_envs``,
+        steps all envs in lockstep (one ``framework.step()`` per env per
+        rollout step), and writes one JSONL line per ``(env_id, episode,
+        step)`` tuple including an integer ``env_id`` field. ``cfg.n_episodes``
+        becomes the per-env episode cap, so the returned ``RunResult.n_episodes``
+        reports ``cfg.n_envs * cfg.n_episodes``.
+        """
+        import gymnasium as gym  # lazy: keeps test collection cheap
+
+        n_envs = int(cfg.n_envs)
+        n_episodes_per_env = int(cfg.n_episodes)
+        env_name = cfg.env_name
+
+        def _make_one(env_name: str = env_name):
+            return gym.make(env_name)
+
+        vec_env = gym.vector.SyncVectorEnv([_make_one for _ in range(n_envs)])
+        try:
+            n_actions = int(vec_env.single_action_space.n)  # type: ignore[attr-defined]
+        except AttributeError:
+            n_actions = 2
+
+        framework = self._build_framework(cfg, n_actions=n_actions)
+        telemetry: _MacStubTelemetry = framework.telemetry_source
+
+        out_dir = Path(cfg.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        jsonl_name = (
+            f"{cfg.ablation}__{cfg.agent_type}__seed{cfg.seed}__nenvs{n_envs}.jsonl"
+        )
+        out_path = out_dir / jsonl_name
+
+        latencies: list[float] = []
+        energies: list[float] = []
+        memory_utils: list[float] = []
+        rewards: list[float] = []
+        oom_events = 0
+        n_steps = 0
+        energy_remaining = 1000.0
+
+        # Per-env episode + within-episode-step counters.
+        per_env_episode = [0] * n_envs
+        per_env_step = [0] * n_envs
+        # Mark envs that have hit their per-env episode cap so we stop writing
+        # JSONL lines for them once they're done. We continue to step them in
+        # the vector-env (cheap) until all are done.
+        per_env_done = [False] * n_envs
+
+        t0 = time.perf_counter()
+        obs, _info = vec_env.reset(seed=int(cfg.seed))
+        with open(out_path, "w", encoding="utf-8") as out_file:
+            try:
+                while not all(per_env_done):
+                    actions = np.zeros(n_envs, dtype=np.int64)
+                    fw_dts_ms = [0.0] * n_envs
+                    omegas: list[list[float]] = [[]] * n_envs
+
+                    # Per-env framework.step (one action per env per rollout step).
+                    for i in range(n_envs):
+                        memory_util_i = 0.1 + 0.001 * per_env_step[i]
+                        # Update telemetry to mirror the single-env contract
+                        # (the framework.step reads telemetry latched from
+                        # the previous env-i step).
+                        telemetry.update(
+                            latency_ms=latencies[-1] if latencies else 0.0,
+                            energy_remaining_j=energy_remaining,
+                            memory_util=memory_util_i,
+                        )
+
+                        t_fw0 = time.perf_counter()
+                        record = framework.step(obs[i])
+                        t_fw1 = time.perf_counter()
+                        fw_dts_ms[i] = (t_fw1 - t_fw0) * 1000.0
+                        actions[i] = int(record["action"])
+                        omegas[i] = [float(x) for x in record["omega"]]
+
+                    # Single vector step submits all actions at once.
+                    t_env0 = time.perf_counter()
+                    obs, vec_rewards, vec_term, vec_trunc, _vinfo = vec_env.step(
+                        actions
+                    )
+                    t_env1 = time.perf_counter()
+                    env_dt_ms_total = (t_env1 - t_env0) * 1000.0
+                    # Spread the vector-step latency evenly across envs (a
+                    # SyncVectorEnv steps them sequentially, so per-env
+                    # contribution is amortised).
+                    env_dt_ms_per = env_dt_ms_total / max(1, n_envs)
+
+                    for i in range(n_envs):
+                        if per_env_done[i]:
+                            # Still increment counters in case the vector-env
+                            # auto-resets, but skip JSONL emission.
+                            done_i = bool(vec_term[i] or vec_trunc[i])
+                            if done_i:
+                                per_env_step[i] = 0
+                            else:
+                                per_env_step[i] += 1
+                            continue
+
+                        memory_util_i = 0.1 + 0.001 * per_env_step[i]
+                        action_i = int(actions[i])
+                        reward_i = float(vec_rewards[i])
+                        latency_ms_i = env_dt_ms_per + fw_dts_ms[i]
+                        energy_j_i = 1e-3 * (action_i + 1)
+                        energy_remaining = max(0.0, energy_remaining - energy_j_i)
+
+                        framework.observe_reward(reward_i)
+
+                        if memory_util_i >= 1.0:
+                            oom_events += 1
+
+                        line = {
+                            "env_id": int(i),
+                            "episode": int(per_env_episode[i]),
+                            "step": int(per_env_step[i]),
+                            "action": int(action_i),
+                            "reward": float(reward_i),
+                            "latency_ms": float(latency_ms_i),
+                            "energy_j": float(energy_j_i),
+                            "memory_util": float(memory_util_i),
+                            "omega": omegas[i],
+                        }
+                        out_file.write(json.dumps(line) + "\n")
+
+                        latencies.append(float(latency_ms_i))
+                        energies.append(float(energy_j_i))
+                        memory_utils.append(float(memory_util_i))
+                        rewards.append(float(reward_i))
+                        n_steps += 1
+
+                        done_i = bool(vec_term[i] or vec_trunc[i])
+                        if done_i:
+                            per_env_episode[i] += 1
+                            per_env_step[i] = 0
+                            if per_env_episode[i] >= n_episodes_per_env:
+                                per_env_done[i] = True
+                        else:
+                            per_env_step[i] += 1
+            finally:
+                vec_env.close()
+        wall_time_s = time.perf_counter() - t0
+
+        tail_p99_ms, mean_energy_j, mean_memory_util, mean_reward = _aggregate_metrics(
+            latencies, energies, memory_utils, rewards
+        )
+        override_fire_count = int(getattr(framework.override_layer, "fire_count", 0))
+
+        return RunResult(
+            config=cfg.to_dict(),
+            n_steps=int(n_steps),
+            n_episodes=int(n_envs * n_episodes_per_env),
             hv=None,
             tail_p99_ms=tail_p99_ms,
             mean_energy_j=mean_energy_j,

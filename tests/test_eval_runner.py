@@ -278,3 +278,225 @@ def test_make_telemetry_mac_stub_does_not_warn():
         warnings.simplefilter("error")
         source, adapter = _make_telemetry("mac_stub")
     assert source.__class__.__name__ == "_MacStubTelemetry"
+
+
+# -----------------------------------------------------------------------------
+# Week 9: n_envs (multi-env scaling) tests
+# -----------------------------------------------------------------------------
+
+
+def test_eval_config_default_n_envs_is_one():
+    """W9: n_envs defaults to 1 for backward compatibility."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=1,
+        seed=0,
+        out_dir=Path("runs/eval"),
+    )
+    assert cfg.n_envs == 1
+
+
+def test_eval_config_round_trip_dict_preserves_n_envs():
+    """W9: dict round-trip preserves n_envs > 1."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=3,
+        seed=7,
+        out_dir=Path("runs/eval"),
+        n_envs=4,
+    )
+    d = cfg.to_dict()
+    assert d["n_envs"] == 4
+    cfg2 = EvalConfig.from_dict(d)
+    assert cfg2.n_envs == 4
+
+
+def test_eval_config_round_trip_yaml_preserves_n_envs(tmp_path):
+    """W9: YAML round-trip preserves n_envs > 1."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=2,
+        seed=42,
+        out_dir=tmp_path / "runs",
+        n_envs=2,
+    )
+    path = tmp_path / "c.yaml"
+    cfg.to_yaml(path)
+    cfg2 = EvalConfig.from_yaml(path)
+    assert cfg2.n_envs == 2
+
+
+def test_load_sweep_yaml_omitting_n_envs_defaults_to_one(tmp_path):
+    """W9 back-compat: pre-W9 sweep YAMLs without n_envs still parse."""
+    yaml_text = """
+configs:
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: none
+    platform: mac_stub
+    n_episodes: 1
+    seed: 0
+    out_dir: runs/a
+"""
+    path = tmp_path / "sweep.yaml"
+    path.write_text(yaml_text)
+    cfgs = load_sweep_yaml(path)
+    assert len(cfgs) == 1
+    assert cfgs[0].n_envs == 1
+
+
+def test_load_sweep_yaml_with_n_envs_field(tmp_path):
+    """W9: sweep YAMLs may set n_envs explicitly."""
+    yaml_text = """
+configs:
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: none
+    platform: mac_stub
+    n_episodes: 1
+    seed: 0
+    out_dir: runs/a
+    n_envs: 4
+"""
+    path = tmp_path / "sweep.yaml"
+    path.write_text(yaml_text)
+    cfgs = load_sweep_yaml(path)
+    assert len(cfgs) == 1
+    assert cfgs[0].n_envs == 4
+
+
+def test_run_with_n_envs_2_total_episodes_is_2x(tmp_path):
+    """W9: with n_envs=2 and n_episodes=2 (per-env), total = 4 episodes."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=2,
+        seed=0,
+        out_dir=tmp_path,
+        n_envs=2,
+    )
+    result = EvalRunner().run(cfg)
+    assert isinstance(result, RunResult)
+    assert result.n_episodes == 4
+
+
+def test_run_with_n_envs_2_jsonl_filename_includes_nenvs(tmp_path):
+    """W9: vector-path JSONL filename has the nenvs suffix."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=1,
+        seed=0,
+        out_dir=tmp_path,
+        n_envs=2,
+    )
+    EvalRunner().run(cfg)
+    jsonl_files = list(tmp_path.glob("*.jsonl"))
+    assert len(jsonl_files) == 1
+    assert "nenvs2" in jsonl_files[0].name
+
+
+def test_run_with_n_envs_2_jsonl_lines_have_env_id(tmp_path):
+    """W9: every JSONL line in the vector path carries an integer env_id."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=1,
+        seed=0,
+        out_dir=tmp_path,
+        n_envs=2,
+    )
+    EvalRunner().run(cfg)
+    jsonl_files = list(tmp_path.glob("*.jsonl"))
+    assert len(jsonl_files) == 1
+    lines = jsonl_files[0].read_text().splitlines()
+    assert len(lines) > 0
+    seen_env_ids = set()
+    for line in lines:
+        rec = json.loads(line)
+        assert "env_id" in rec, f"line missing env_id: {rec}"
+        assert isinstance(rec["env_id"], int)
+        assert rec["env_id"] in (0, 1)
+        seen_env_ids.add(rec["env_id"])
+    assert seen_env_ids == {0, 1}
+
+
+def test_run_with_n_envs_1_jsonl_lines_have_no_env_id_key(tmp_path):
+    """W9 back-compat: single-env path must NOT emit env_id (byte-identical)."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=1,
+        seed=0,
+        out_dir=tmp_path,
+        n_envs=1,
+    )
+    EvalRunner().run(cfg)
+    jsonl_files = list(tmp_path.glob("*.jsonl"))
+    assert len(jsonl_files) == 1
+    lines = jsonl_files[0].read_text().splitlines()
+    assert len(lines) > 0
+    for line in lines:
+        rec = json.loads(line)
+        assert "env_id" not in rec, f"single-env path leaked env_id: {rec}"
+
+
+def test_run_with_n_envs_2_seed_reproducibility(tmp_path):
+    """W9: two runs with the same seed yield the same per-env reward sequence."""
+    out_a = tmp_path / "a"
+    out_b = tmp_path / "b"
+    cfg_a = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=1,
+        seed=42,
+        out_dir=out_a,
+        n_envs=2,
+    )
+    cfg_b = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=1,
+        seed=42,
+        out_dir=out_b,
+        n_envs=2,
+    )
+    EvalRunner().run(cfg_a)
+    EvalRunner().run(cfg_b)
+    jsonl_a = next(out_a.glob("*.jsonl"))
+    jsonl_b = next(out_b.glob("*.jsonl"))
+
+    def _per_env_rewards(path):
+        per = {0: [], 1: []}
+        for line in path.read_text().splitlines():
+            rec = json.loads(line)
+            per[int(rec["env_id"])].append(float(rec["reward"]))
+        return per
+
+    pa = _per_env_rewards(jsonl_a)
+    pb = _per_env_rewards(jsonl_b)
+    assert pa[0] == pb[0]
+    assert pa[1] == pb[1]
+    assert len(pa[0]) > 0
+    assert len(pa[1]) > 0
