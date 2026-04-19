@@ -10,6 +10,7 @@ from tetrarl.sys.dvfs import (
     STUB_GPU_FREQS_HZ,
     TransitionLatency,
 )
+from tetrarl.sys.platforms import Platform
 
 
 def test_auto_detects_stub_mode_on_mac():
@@ -133,3 +134,78 @@ def test_real_mode_uses_overridden_paths(tmp_path):
     assert cpu_set.read_text() == "300000"
     assert gpu_min.read_text() == "800000000"
     assert gpu_max.read_text() == "800000000"
+
+
+# --- Nano / multi-platform tests --------------------------------------------
+
+
+def test_nano_profile_selects_nano_freq_tables():
+    ctrl = DVFSController(platform=Platform.NANO, stub=True)
+    avail = ctrl.available_frequencies()
+    # Nano endpoints from L4T 32.7: bottom CPU = 102 MHz, top GPU = 921.6 MHz.
+    assert avail["cpu"][0] == 102_000
+    assert avail["gpu"][-1] == 921_600_000
+
+
+def test_nano_set_freq_in_stub_mode_writes_no_file():
+    # We cannot positively assert "no file written" without monkeypatching the
+    # filesystem; the spec instead asks us to confirm set_freq on a Nano stub
+    # controller returns a DVFSConfig populated with Nano-table frequencies
+    # (which implicitly proves we never went through the real-mode write path,
+    # since those sysfs nodes do not exist on this Mac dev box).
+    ctrl = DVFSController(platform=Platform.NANO, stub=True)
+    state = ctrl.set_freq(cpu_idx=5, gpu_idx=3)
+    nano_cpu = ctrl.profile.cpu_freqs_hz
+    nano_gpu = ctrl.profile.gpu_freqs_hz
+    assert state.cpu_freq_khz == nano_cpu[5]
+    assert state.gpu_freq_hz == nano_gpu[3]
+
+
+def test_nano_and_orin_have_distinct_freq_tables():
+    nano = DVFSController(platform=Platform.NANO, stub=True)
+    orin = DVFSController(platform=Platform.ORIN_AGX, stub=True)
+    assert (
+        nano.available_frequencies()["cpu"]
+        != orin.available_frequencies()["cpu"]
+    )
+    assert (
+        nano.available_frequencies()["gpu"]
+        != orin.available_frequencies()["gpu"]
+    )
+
+
+def test_backward_compat_default_is_orin_agx():
+    ctrl = DVFSController(stub=True)
+    avail = ctrl.available_frequencies()
+    # Top of the existing Orin AGX stub table.
+    assert avail["cpu"][-1] == 2_188_800
+    assert avail["cpu"] == list(STUB_CPU_FREQS_KHZ)
+    assert avail["gpu"] == list(STUB_GPU_FREQS_HZ)
+
+
+def test_string_platform_arg_works():
+    by_str = DVFSController(platform="nano", stub=True)
+    by_enum = DVFSController(platform=Platform.NANO, stub=True)
+    assert by_str.available_frequencies() == by_enum.available_frequencies()
+
+
+def test_nano_real_mode_paths_use_57000000_gpu_node():
+    # Nano sysfs writes only succeed on a physical Linux Nano (the spec
+    # explicitly defers physical-Nano sysfs write tests). Here we just
+    # inspect the derived gpu_paths to confirm we point at the right
+    # devfreq node (57000000.gpu) rather than the Orin one (17000000.gpu).
+    ctrl = DVFSController(platform=Platform.NANO, stub=True)
+    gpu_paths = ctrl.gpu_paths
+    assert "57000000.gpu" in gpu_paths["min"]
+    assert "57000000.gpu" in gpu_paths["max"]
+    assert "57000000.gpu" in gpu_paths["cur"]
+    assert "17000000.gpu" not in gpu_paths["min"]
+
+
+def test_nano_top_freqs_below_orin():
+    nano = DVFSController(platform=Platform.NANO, stub=True)
+    orin = DVFSController(platform=Platform.ORIN_AGX, stub=True)
+    n_avail = nano.available_frequencies()
+    o_avail = orin.available_frequencies()
+    assert n_avail["cpu"][-1] < o_avail["cpu"][-1]
+    assert n_avail["gpu"][-1] < o_avail["gpu"][-1]

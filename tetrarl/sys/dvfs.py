@@ -4,40 +4,67 @@ Reads cpufreq + devfreq sysfs nodes, exposes set_freq(cpu_idx, gpu_idx),
 profiles transition latency for paper figures. Mac dev: pass `stub=True`
 (or rely on auto-detect when sysfs nodes are absent) to avoid touching
 the filesystem.
+
+Per-platform constants (frequency tables, sysfs node paths) live in
+``tetrarl.sys.platforms``. Pass ``platform=Platform.NANO`` (or the string
+``"nano"``) to drive a Jetson Nano; the default remains Orin AGX.
 """
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
-
-ORIN_CPU_AVAILABLE = (
-    "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies"
+from tetrarl.sys.platforms import (
+    PLATFORM_PROFILES,
+    Platform,
+    PlatformProfile,
+    get_profile,
 )
-ORIN_CPU_SETSPEED = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed"
-ORIN_CPU_CUR = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
-ORIN_CPU_GOVERNOR = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
-
-ORIN_GPU_AVAILABLE = (
-    "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu/available_frequencies"
-)
-ORIN_GPU_MIN = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu/min_freq"
-ORIN_GPU_MAX = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu/max_freq"
-ORIN_GPU_CUR = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu/cur_freq"
 
 
-# Representative Orin AGX 12-core (Cortex-A78AE) CPU + Ampere GPU table.
-STUB_CPU_FREQS_KHZ: list[int] = [
-    115200, 192000, 384000, 576000, 729600, 921600,
-    1113600, 1305600, 1497600, 1689600, 1881600, 2073600, 2188800,
-]
-STUB_GPU_FREQS_HZ: list[int] = [
-    114750000, 216750000, 318750000, 420750000, 510000000,
-    624750000, 726750000, 828750000, 930750000, 1032750000,
-    1122000000, 1224750000, 1300500000, 1377000000,
-]
+# Backward-compat module-level aliases. These mirror the Orin AGX profile and
+# are kept because pre-refactor tests (and external callers) import them.
+STUB_CPU_FREQS_KHZ: list[int] = list(PLATFORM_PROFILES[Platform.ORIN_AGX].cpu_freqs_hz)
+STUB_GPU_FREQS_HZ: list[int] = list(PLATFORM_PROFILES[Platform.ORIN_AGX].gpu_freqs_hz)
+
+
+def _default_cpu_paths(profile: PlatformProfile) -> dict[str, str]:
+    """Build the default cpufreq sysfs paths for a platform profile.
+
+    Historical behavior targets cpu0 for setspeed (and cur/governor/available
+    siblings under cpu0); Orin AGX and Nano both expose the standard cpufreq
+    layout, so the available/cur/governor siblings are not per-platform.
+    """
+    return {
+        "available": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies",
+        "setspeed": profile.cpu_setspeed_path_template.format(cpu=0),
+        "cur": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
+        "governor": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor",
+    }
+
+
+def _default_gpu_paths(profile: PlatformProfile) -> dict[str, str]:
+    """Derive devfreq sysfs siblings from the profile's set_freq path.
+
+    The profile stores the userspace governor write target (``.../userspace/
+    set_freq``); strip that suffix to find the devfreq directory and build
+    available/min/max/cur as siblings.
+    """
+    set_freq = profile.gpu_setspeed_path
+    suffix = "/userspace/set_freq"
+    if not set_freq.endswith(suffix):
+        raise ValueError(
+            f"profile gpu_setspeed_path must end with {suffix!r}; got {set_freq!r}"
+        )
+    devfreq_dir = set_freq[: -len(suffix)]
+    return {
+        "available": f"{devfreq_dir}/available_frequencies",
+        "min": f"{devfreq_dir}/min_freq",
+        "max": f"{devfreq_dir}/max_freq",
+        "cur": f"{devfreq_dir}/cur_freq",
+    }
 
 
 @dataclass
@@ -57,38 +84,35 @@ class TransitionLatency:
 class DVFSController:
     def __init__(
         self,
-        platform: str = "orin_agx",
+        platform: Union[Platform, str] = Platform.ORIN_AGX,
         stub: Optional[bool] = None,
         cpu_paths: Optional[dict] = None,
         gpu_paths: Optional[dict] = None,
     ):
-        self.platform = platform
-        self.cpu_paths = cpu_paths or {
-            "available": ORIN_CPU_AVAILABLE,
-            "setspeed": ORIN_CPU_SETSPEED,
-            "cur": ORIN_CPU_CUR,
-            "governor": ORIN_CPU_GOVERNOR,
-        }
-        self.gpu_paths = gpu_paths or {
-            "available": ORIN_GPU_AVAILABLE,
-            "min": ORIN_GPU_MIN,
-            "max": ORIN_GPU_MAX,
-            "cur": ORIN_GPU_CUR,
-        }
+        self.profile = get_profile(platform)
+        # Preserve the original-string form for backward compatibility with
+        # pre-refactor callers that read ctrl.platform; surface the canonical
+        # enum value so debugging stays unambiguous.
+        self.platform = (
+            platform.value if isinstance(platform, Platform) else str(platform)
+        )
+
+        self.cpu_paths = cpu_paths or _default_cpu_paths(self.profile)
+        self.gpu_paths = gpu_paths or _default_gpu_paths(self.profile)
 
         if stub is None:
             stub = not Path(self.cpu_paths["available"]).exists()
         self.stub = stub
 
         if self.stub:
-            self._stub_cpu_idx = len(STUB_CPU_FREQS_KHZ) - 1
-            self._stub_gpu_idx = len(STUB_GPU_FREQS_HZ) - 1
+            self._stub_cpu_idx = len(self.profile.cpu_freqs_hz) - 1
+            self._stub_gpu_idx = len(self.profile.gpu_freqs_hz) - 1
 
     def available_frequencies(self) -> dict[str, list[int]]:
         if self.stub:
             return {
-                "cpu": list(STUB_CPU_FREQS_KHZ),
-                "gpu": list(STUB_GPU_FREQS_HZ),
+                "cpu": list(self.profile.cpu_freqs_hz),
+                "gpu": list(self.profile.gpu_freqs_hz),
             }
         cpu = sorted(
             int(x) for x in Path(self.cpu_paths["available"]).read_text().split()
@@ -133,8 +157,8 @@ class DVFSController:
     def current_state(self) -> DVFSConfig:
         if self.stub:
             return DVFSConfig(
-                cpu_freq_khz=STUB_CPU_FREQS_KHZ[self._stub_cpu_idx],
-                gpu_freq_hz=STUB_GPU_FREQS_HZ[self._stub_gpu_idx],
+                cpu_freq_khz=self.profile.cpu_freqs_hz[self._stub_cpu_idx],
+                gpu_freq_hz=self.profile.gpu_freqs_hz[self._stub_gpu_idx],
             )
         cpu_freq = int(Path(self.cpu_paths["cur"]).read_text().strip())
         gpu_freq = int(Path(self.gpu_paths["cur"]).read_text().strip())
