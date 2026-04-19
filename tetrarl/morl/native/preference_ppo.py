@@ -152,18 +152,57 @@ class PreferenceNetwork(nn.Module):
                 layer_init(nn.Linear(hidden_dim, act_dim), std=0.01),
             )
 
-    def get_value(self, obs_aug: torch.Tensor) -> torch.Tensor:
+    def _build_graph_feat(
+        self,
+        graph_obs: dict,
+        omega: torch.Tensor,
+    ) -> torch.Tensor:
+        """Run the GNN extractor and concat preference vector.
+
+        Returns a (B, gnn_out + pref_dim) feature tensor that plays the
+        same role as ``obs_aug`` in the flat-observation code path.
+        """
+        if not self.expects_graph or self.gnn_extractor is None:
+            raise RuntimeError(
+                "graph_obs supplied but PreferenceNetwork has no GNN extractor"
+            )
+        if omega is None:
+            raise ValueError("omega must be provided alongside graph_obs")
+        graph_emb = self.gnn_extractor(
+            graph_obs["node_features"],
+            graph_obs["edge_index"],
+            graph_obs.get("batch"),
+        )
+        if omega.dim() == 1:
+            omega = omega.unsqueeze(0)
+        if omega.shape[0] != graph_emb.shape[0]:
+            raise ValueError(
+                f"omega batch dim {omega.shape[0]} does not match graph batch "
+                f"dim {graph_emb.shape[0]}"
+            )
+        return torch.cat([graph_emb, omega], dim=-1)
+
+    def get_value(
+        self,
+        obs_aug: torch.Tensor | None = None,
+        *,
+        graph_obs: dict | None = None,
+        omega: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if graph_obs is not None:
+            feat = self._build_graph_feat(graph_obs, omega)
+            return self.critic(feat)
         return self.critic(obs_aug)
 
-    def get_action_and_value(
+    def _actor_critic(
         self,
-        obs_aug: torch.Tensor,
-        action: torch.Tensor | None = None,
-        mask: torch.Tensor | None = None,
+        feat: torch.Tensor,
+        action: torch.Tensor | None,
+        mask: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.continuous:
             # Continuous branch: mask is not applicable; ignored silently.
-            action_mean = self.actor_mean(obs_aug)
+            action_mean = self.actor_mean(feat)
             action_logstd = self.actor_logstd.expand_as(action_mean)
             action_std = torch.exp(action_logstd)
             probs = Normal(action_mean, action_std)
@@ -173,10 +212,10 @@ class PreferenceNetwork(nn.Module):
                 action,
                 probs.log_prob(action).sum(-1),
                 probs.entropy().sum(-1),
-                self.critic(obs_aug),
+                self.critic(feat),
             )
         else:
-            logits = self.actor_logits(obs_aug)
+            logits = self.actor_logits(feat)
             if mask is not None:
                 logits = apply_logit_mask(logits, mask)
             probs = Categorical(logits=logits)
@@ -186,19 +225,41 @@ class PreferenceNetwork(nn.Module):
                 action,
                 probs.log_prob(action),
                 probs.entropy(),
-                self.critic(obs_aug),
+                self.critic(feat),
             )
+
+    def get_action_and_value(
+        self,
+        obs_aug: torch.Tensor | None = None,
+        action: torch.Tensor | None = None,
+        mask: torch.Tensor | None = None,
+        *,
+        graph_obs: dict | None = None,
+        omega: torch.Tensor | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        if graph_obs is not None:
+            feat = self._build_graph_feat(graph_obs, omega)
+        else:
+            feat = obs_aug
+        return self._actor_critic(feat, action, mask)
 
     def get_deterministic_action(
         self,
-        obs_aug: torch.Tensor,
+        obs_aug: torch.Tensor | None = None,
         mask: torch.Tensor | None = None,
+        *,
+        graph_obs: dict | None = None,
+        omega: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        if graph_obs is not None:
+            feat = self._build_graph_feat(graph_obs, omega)
+        else:
+            feat = obs_aug
         if self.continuous:
             # Continuous branch: mask is not applicable; ignored silently.
-            return self.actor_mean(obs_aug)
+            return self.actor_mean(feat)
         else:
-            logits = self.actor_logits(obs_aug)
+            logits = self.actor_logits(feat)
             if mask is not None:
                 logits = apply_logit_mask(logits, mask)
             return logits.argmax(-1)
@@ -222,14 +283,13 @@ def evaluate_policy(
     """
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
     act_dim = env.action_space.n if discrete else None
+    is_graph = isinstance(env.observation_space, gym.spaces.Dict)
     all_returns: list[np.ndarray] = []
     for _ in range(n_episodes):
         obs, _ = env.reset()
         episode_rewards: list[np.ndarray] = []
         done = False
         while not done:
-            obs_aug = np.concatenate([obs, omega]).astype(np.float32)
-            obs_t = torch.from_numpy(obs_aug).unsqueeze(0).to(device)
             mask_t: torch.Tensor | None = None
             if mask_fn is not None and discrete:
                 m = np.asarray(mask_fn(obs), dtype=bool)
@@ -237,15 +297,48 @@ def evaluate_policy(
                     torch.as_tensor(m, dtype=torch.bool, device=device)
                     .unsqueeze(0)
                 )
-            with torch.no_grad():
-                if deterministic:
-                    action = network.get_deterministic_action(
-                        obs_t, mask=mask_t
-                    )
+            if is_graph:
+                nf = torch.from_numpy(
+                    np.asarray(obs["node_features"], dtype=np.float32)
+                ).to(device)
+                ne = int(obs["num_edges"])
+                ei_full = np.asarray(obs["edge_index"], dtype=np.int64)
+                if ne > 0:
+                    ei = torch.from_numpy(ei_full[:, :ne]).long().to(device)
                 else:
-                    action, _, _, _ = network.get_action_and_value(
-                        obs_t, mask=mask_t
-                    )
+                    ei = torch.zeros((2, 0), dtype=torch.long, device=device)
+                om = (
+                    torch.from_numpy(np.asarray(omega, dtype=np.float32))
+                    .float()
+                    .unsqueeze(0)
+                    .to(device)
+                )
+                graph_obs = {
+                    "node_features": nf,
+                    "edge_index": ei,
+                    "batch": None,
+                }
+                with torch.no_grad():
+                    if deterministic:
+                        action = network.get_deterministic_action(
+                            graph_obs=graph_obs, omega=om, mask=mask_t
+                        )
+                    else:
+                        action, _, _, _ = network.get_action_and_value(
+                            graph_obs=graph_obs, omega=om, mask=mask_t
+                        )
+            else:
+                obs_aug = np.concatenate([obs, omega]).astype(np.float32)
+                obs_t = torch.from_numpy(obs_aug).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    if deterministic:
+                        action = network.get_deterministic_action(
+                            obs_t, mask=mask_t
+                        )
+                    else:
+                        action, _, _, _ = network.get_action_and_value(
+                            obs_t, mask=mask_t
+                        )
             if discrete:
                 act = int(action.item())
             else:
@@ -295,12 +388,35 @@ def train_preference_ppo(
     np.random.seed(config.seed)
 
     env = env_fn()
-    obs_dim = int(np.prod(env.observation_space.shape))
+    is_graph = isinstance(env.observation_space, gym.spaces.Dict)
+
+    # Consistency check: graph extractor <-> Dict obs space.
+    if (gnn_extractor is not None) != is_graph:
+        env.close()
+        raise ValueError(
+            "Inconsistent configuration: graph envs (Dict obs space) require a "
+            "gnn_extractor; flat envs must not be paired with one. "
+            f"is_graph={is_graph}, gnn_extractor={'set' if gnn_extractor is not None else 'None'}."
+        )
+
     continuous = isinstance(env.action_space, gym.spaces.Box)
     act_dim = (
         env.action_space.shape[0] if continuous else env.action_space.n
     )
     n_obj = config.n_objectives
+
+    if is_graph:
+        obs_space = env.observation_space
+        n_nodes = int(obs_space["node_features"].shape[0])
+        feat_dim = int(obs_space["node_features"].shape[1])
+        e_max = int(obs_space["edge_index"].shape[1])
+        # PreferenceNetwork's flat-MLP heads ignore obs_dim when an extractor
+        # is supplied, but we still pass the per-node feature dim so the
+        # constructor signature stays well-formed.
+        obs_dim = feat_dim
+    else:
+        obs_dim = int(np.prod(env.observation_space.shape))
+        n_nodes = feat_dim = e_max = 0
 
     network = PreferenceNetwork(
         obs_dim,
@@ -310,20 +426,28 @@ def train_preference_ppo(
         continuous,
         gnn_extractor=gnn_extractor,
     ).to(device)
-    if gnn_extractor is not None:
-        raise NotImplementedError(
-            "GNN feature extractor is wired into PreferenceNetwork but the "
-            "current rollout still produces flat observations (obs_dim + "
-            "pref_dim). Training with gnn_extractor requires a graph-aware "
-            "env that yields (node_features, edge_index, batch). "
-            "tetrarl/morl/native/gnn_extractor.py is fully unit-tested as a "
-            "standalone module; integration with a graph env is Week 5+ scope."
-        )
     optimizer = optim.Adam(network.parameters(), lr=config.lr, eps=1e-5)
 
     # Rollout buffers
-    aug_dim = obs_dim + n_obj
-    obs_buf = torch.zeros((config.num_steps, aug_dim), device=device)
+    if is_graph:
+        nf_buf = torch.zeros(
+            (config.num_steps, n_nodes, feat_dim), device=device
+        )
+        ei_buf = torch.zeros(
+            (config.num_steps, 2, max(e_max, 1)),
+            dtype=torch.long,
+            device=device,
+        )
+        ne_buf = torch.zeros(
+            config.num_steps, dtype=torch.long, device=device
+        )
+        om_buf = torch.zeros((config.num_steps, n_obj), device=device)
+        obs_buf = None
+    else:
+        aug_dim = obs_dim + n_obj
+        obs_buf = torch.zeros((config.num_steps, aug_dim), device=device)
+        nf_buf = ei_buf = ne_buf = om_buf = None
+
     if continuous:
         act_buf = torch.zeros(
             (config.num_steps, act_dim), device=device
@@ -370,9 +494,24 @@ def train_preference_ppo(
         for step in range(config.num_steps):
             global_step += 1
 
-            obs_aug = np.concatenate([obs, omega]).astype(np.float32)
-            obs_buf[step] = torch.from_numpy(obs_aug).to(device)
             done_buf[step] = next_done
+
+            if is_graph:
+                nf_np = np.asarray(obs["node_features"], dtype=np.float32)
+                nf_buf[step] = torch.from_numpy(nf_np).to(device)
+                ne = int(obs["num_edges"])
+                ne_buf[step] = ne
+                if ne > 0:
+                    ei_np = np.asarray(obs["edge_index"], dtype=np.int64)[:, :ne]
+                    ei_buf[step, :, :ne] = (
+                        torch.from_numpy(ei_np).long().to(device)
+                    )
+                om_buf[step] = torch.from_numpy(
+                    np.asarray(omega, dtype=np.float32)
+                ).to(device)
+            else:
+                obs_aug = np.concatenate([obs, omega]).astype(np.float32)
+                obs_buf[step] = torch.from_numpy(obs_aug).to(device)
 
             mask_t: torch.Tensor | None = None
             if use_mask:
@@ -381,10 +520,27 @@ def train_preference_ppo(
                 mask_t = m.unsqueeze(0)
 
             with torch.no_grad():
-                obs_t = obs_buf[step].unsqueeze(0)
-                action, logprob, _, value = (
-                    network.get_action_and_value(obs_t, mask=mask_t)
-                )
+                if is_graph:
+                    nf_t = nf_buf[step]
+                    ne_step = int(ne_buf[step].item())
+                    ei_t = ei_buf[step, :, :ne_step]
+                    om_t = om_buf[step].unsqueeze(0)
+                    action, logprob, _, value = (
+                        network.get_action_and_value(
+                            graph_obs={
+                                "node_features": nf_t,
+                                "edge_index": ei_t,
+                                "batch": None,
+                            },
+                            omega=om_t,
+                            mask=mask_t,
+                        )
+                    )
+                else:
+                    obs_t = obs_buf[step].unsqueeze(0)
+                    action, logprob, _, value = (
+                        network.get_action_and_value(obs_t, mask=mask_t)
+                    )
                 value_buf[step] = value.flatten()[0]
 
             act_buf[step] = action.squeeze(0)
@@ -423,9 +579,43 @@ def train_preference_ppo(
 
         # === GAE ===
         with torch.no_grad():
-            next_aug = np.concatenate([obs, omega]).astype(np.float32)
-            next_t = torch.from_numpy(next_aug).unsqueeze(0).to(device)
-            next_value = network.get_value(next_t).flatten()[0]
+            if is_graph:
+                nf_next = torch.from_numpy(
+                    np.asarray(obs["node_features"], dtype=np.float32)
+                ).to(device)
+                ne_next = int(obs["num_edges"])
+                if ne_next > 0:
+                    ei_next = (
+                        torch.from_numpy(
+                            np.asarray(
+                                obs["edge_index"], dtype=np.int64
+                            )[:, :ne_next]
+                        )
+                        .long()
+                        .to(device)
+                    )
+                else:
+                    ei_next = torch.zeros(
+                        (2, 0), dtype=torch.long, device=device
+                    )
+                om_next = (
+                    torch.from_numpy(np.asarray(omega, dtype=np.float32))
+                    .float()
+                    .unsqueeze(0)
+                    .to(device)
+                )
+                next_value = network.get_value(
+                    graph_obs={
+                        "node_features": nf_next,
+                        "edge_index": ei_next,
+                        "batch": None,
+                    },
+                    omega=om_next,
+                ).flatten()[0]
+            else:
+                next_aug = np.concatenate([obs, omega]).astype(np.float32)
+                next_t = torch.from_numpy(next_aug).unsqueeze(0).to(device)
+                next_value = network.get_value(next_t).flatten()[0]
 
             advantages = torch.zeros(config.num_steps, device=device)
             lastgaelam = 0.0
@@ -469,13 +659,56 @@ def train_preference_ppo(
                 mb_mask = (
                     mask_buf[mb_inds] if mask_buf is not None else None
                 )
-                _, newlogprob, entropy, newvalue = (
-                    network.get_action_and_value(
-                        obs_buf[mb_inds],
-                        act_buf[mb_inds],
-                        mask=mb_mask,
+                if is_graph:
+                    # Build a merged batched graph: stack each rollout step's
+                    # (n_nodes, feat_dim) node tensor and offset its edges by
+                    # k * n_nodes to keep the per-graph adjacencies disjoint.
+                    nfs: list[torch.Tensor] = []
+                    eis: list[torch.Tensor] = []
+                    batches: list[torch.Tensor] = []
+                    for k, i in enumerate(mb_inds):
+                        nfs.append(nf_buf[i])
+                        ne_i = int(ne_buf[i].item())
+                        if ne_i > 0:
+                            ei_k = ei_buf[i, :, :ne_i] + (k * n_nodes)
+                            eis.append(ei_k)
+                        batches.append(
+                            torch.full(
+                                (n_nodes,),
+                                k,
+                                dtype=torch.long,
+                                device=device,
+                            )
+                        )
+                    merged_nf = torch.cat(nfs, dim=0)
+                    if eis:
+                        merged_ei = torch.cat(eis, dim=1)
+                    else:
+                        merged_ei = torch.zeros(
+                            (2, 0), dtype=torch.long, device=device
+                        )
+                    merged_batch = torch.cat(batches)
+                    omega_mb = om_buf[mb_inds]
+                    _, newlogprob, entropy, newvalue = (
+                        network.get_action_and_value(
+                            graph_obs={
+                                "node_features": merged_nf,
+                                "edge_index": merged_ei,
+                                "batch": merged_batch,
+                            },
+                            omega=omega_mb,
+                            action=act_buf[mb_inds],
+                            mask=mb_mask,
+                        )
                     )
-                )
+                else:
+                    _, newlogprob, entropy, newvalue = (
+                        network.get_action_and_value(
+                            obs_buf[mb_inds],
+                            act_buf[mb_inds],
+                            mask=mb_mask,
+                        )
+                    )
                 logratio = newlogprob - logprob_buf[mb_inds]
                 ratio = logratio.exp()
 

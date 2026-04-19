@@ -123,6 +123,12 @@ class TetraRLNativeAgent:
         self._network: PreferenceNetwork | None = None
         self._pareto_front: np.ndarray | None = None
         self._results: dict[str, Any] | None = None
+
+        # DAG-env-specific knobs (read from **kwargs so callers can pass
+        # them straight through to the agent constructor).
+        self._dag_n_tasks: int = int(kwargs.get("n_tasks", 8))
+        self._dag_density: float = float(kwargs.get("density", 0.3))
+
         self._env_fn = self._make_env_fn()
 
         # --- Optional injection points for masking / override / GNN. ---
@@ -162,16 +168,27 @@ class TetraRLNativeAgent:
             self._gnn_extractor = gnn_extractor  # may be None
 
     def _infer_env_spec(self) -> tuple[int, int, bool]:
-        """Return (obs_dim, act_dim, continuous) by briefly opening the env."""
+        """Return (obs_dim, act_dim, continuous) by briefly opening the env.
+
+        For Dict observation spaces (e.g. the DAG scheduler), ``obs_dim``
+        is the per-node feature dimension so a downstream GNN extractor
+        can be sized correctly.
+        """
         env = self._env_fn()
         try:
-            obs_dim = int(np.prod(env.observation_space.shape))
-            continuous = isinstance(env.action_space, gym.spaces.Box)
-            act_dim = (
-                env.action_space.shape[0]
-                if continuous
-                else env.action_space.n
-            )
+            if isinstance(env.observation_space, gym.spaces.Dict):
+                nf_space = env.observation_space["node_features"]
+                obs_dim = int(nf_space.shape[1])
+                continuous = False  # graph envs use Discrete actions today
+                act_dim = env.action_space.n
+            else:
+                obs_dim = int(np.prod(env.observation_space.shape))
+                continuous = isinstance(env.action_space, gym.spaces.Box)
+                act_dim = (
+                    env.action_space.shape[0]
+                    if continuous
+                    else env.action_space.n
+                )
         finally:
             env.close()
         return obs_dim, act_dim, continuous
@@ -182,6 +199,15 @@ class TetraRLNativeAgent:
             from tetrarl.envs.dst import DeepSeaTreasure
 
             return lambda: DeepSeaTreasure()
+        elif env_name == "dag":
+            from tetrarl.envs.dag_scheduler import DAGSchedulerEnv
+
+            n_tasks = self._dag_n_tasks
+            density = self._dag_density
+            seed = self.config.seed
+            return lambda: DAGSchedulerEnv(
+                n_tasks=n_tasks, density=density, seed=seed
+            )
         else:
             import mo_gymnasium
 
@@ -283,13 +309,19 @@ class TetraRLNativeAgent:
         """Restore network and Pareto front from disk."""
         path = Path(path)
         env = self._env_fn()
-        obs_dim = int(np.prod(env.observation_space.shape))
-        continuous = isinstance(env.action_space, gym.spaces.Box)
-        act_dim = (
-            env.action_space.shape[0]
-            if continuous
-            else env.action_space.n
-        )
+        if isinstance(env.observation_space, gym.spaces.Dict):
+            nf_space = env.observation_space["node_features"]
+            obs_dim = int(nf_space.shape[1])
+            continuous = False
+            act_dim = env.action_space.n
+        else:
+            obs_dim = int(np.prod(env.observation_space.shape))
+            continuous = isinstance(env.action_space, gym.spaces.Box)
+            act_dim = (
+                env.action_space.shape[0]
+                if continuous
+                else env.action_space.n
+            )
         env.close()
 
         self._network = PreferenceNetwork(
