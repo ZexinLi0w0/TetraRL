@@ -291,7 +291,14 @@ def run_nano_cartpole(
     oom_events = 0
     if memory_pressure_mb > 0:
         try:
-            pressure_blocks.append(bytearray(int(memory_pressure_mb) * 1024 * 1024))
+            buf = bytearray(int(memory_pressure_mb) * 1024 * 1024)
+            # Touch one byte per page so Linux actually commits physical
+            # pages; bytearray() alone uses lazy zero-page mapping and
+            # tegrastats then under-reports RAM by ~80%.
+            page_size = 4096
+            for off in range(0, len(buf), page_size):
+                buf[off] = 1
+            pressure_blocks.append(buf)
         except (MemoryError, OverflowError):
             oom_events += 1
 
