@@ -1,0 +1,769 @@
+configs:
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__preference_ppo__seed0__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__preference_ppo__seed1__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__preference_ppo__seed2__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__preference_ppo__seed0__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__preference_ppo__seed1__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__preference_ppo__seed2__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__preference_ppo__seed0__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__preference_ppo__seed1__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__preference_ppo__seed2__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__preference_ppo__seed0__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__preference_ppo__seed1__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__preference_ppo__seed2__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__pcn__seed0__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__pcn__seed1__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__pcn__seed2__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__pcn__seed0__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__pcn__seed1__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__pcn__seed2__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__pcn__seed0__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__pcn__seed1__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__pcn__seed2__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__pcn__seed0__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__pcn__seed1__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pcn
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__pcn__seed2__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__pd_morl__seed0__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__pd_morl__seed1__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__pd_morl__seed2__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__pd_morl__seed0__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__pd_morl__seed1__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__pd_morl__seed2__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__pd_morl__seed0__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__pd_morl__seed1__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__pd_morl__seed2__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__pd_morl__seed0__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__pd_morl__seed1__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: pd_morl
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__pd_morl__seed2__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__max_performance__seed0__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__max_performance__seed1__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.4
+    - 0.3
+    - 0.2
+    - 0.1
+    omega_idx: 5
+    jsonl_name: none__max_performance__seed2__o5.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__max_performance__seed0__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__max_performance__seed1__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.1
+    - 0.4
+    - 0.3
+    - 0.2
+    omega_idx: 6
+    jsonl_name: none__max_performance__seed2__o6.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__max_performance__seed0__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__max_performance__seed1__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.2
+    - 0.2
+    - 0.3
+    - 0.3
+    omega_idx: 7
+    jsonl_name: none__max_performance__seed2__o7.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 0
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__max_performance__seed0__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 1
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__max_performance__seed1__o8.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: max_performance
+  ablation: none
+  platform: orin_agx
+  n_episodes: 100
+  seed: 2
+  out_dir: runs/w10_orin_full_fixed
+  extra:
+    omega:
+    - 0.3
+    - 0.3
+    - 0.2
+    - 0.2
+    omega_idx: 8
+    jsonl_name: none__max_performance__seed2__o8.jsonl
+  n_envs: 1
