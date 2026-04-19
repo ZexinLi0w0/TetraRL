@@ -275,18 +275,10 @@ def run_nano_cartpole(
     """
     import gymnasium as gym  # lazy import keeps test collection cheap
 
-    env = gym.make("CartPole-v1")
-    n_actions = int(env.action_space.n)
-    fw, telemetry, override, deferred = make_nano_framework(
-        n_actions=n_actions,
-        seed=seed,
-        platform=platform,
-        max_memory_util=max_memory_util,
-        with_override=with_override,
-        use_real_dvfs=use_real_dvfs,
-        use_real_tegrastats=use_real_tegrastats,
-    )
-
+    # Allocate the memory-pressure block BEFORE we start the
+    # TegrastatsDaemon: the daemon's EMA seeds on its first reading,
+    # so if pressure is allocated after the daemon starts, the EMA
+    # anchors on the low baseline and takes many seconds to converge.
     pressure_blocks: list[bytearray] = []
     oom_events = 0
     if memory_pressure_mb > 0:
@@ -301,6 +293,18 @@ def run_nano_cartpole(
             pressure_blocks.append(buf)
         except (MemoryError, OverflowError):
             oom_events += 1
+
+    env = gym.make("CartPole-v1")
+    n_actions = int(env.action_space.n)
+    fw, telemetry, override, deferred = make_nano_framework(
+        n_actions=n_actions,
+        seed=seed,
+        platform=platform,
+        max_memory_util=max_memory_util,
+        with_override=with_override,
+        use_real_dvfs=use_real_dvfs,
+        use_real_tegrastats=use_real_tegrastats,
+    )
 
     out_file = None
     jsonl_path: Optional[Path] = None
