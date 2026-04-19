@@ -1,0 +1,26 @@
+{
+  "env": "CartPole-v1",
+  "fell_back": false,
+  "requested_env": "CartPole-v1",
+  "total_steps_requested": 50000,
+  "total_steps_completed": 49920,
+  "knob_mapper": "n_steps",
+  "with_override": true,
+  "override_fire_count": 0,
+  "final_lambdas": [
+    0.0,
+    100.0,
+    0.0
+  ],
+  "mean_violations": [
+    0.0,
+    5.0,
+    0.0
+  ],
+  "targets": [
+    30.0,
+    5.0,
+    0.85
+  ],
+  "seed": 0
+}

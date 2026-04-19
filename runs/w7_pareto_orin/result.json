@@ -1,0 +1,104 @@
+{
+  "env": "dag_scheduler_mo",
+  "steps_per_omega": 10000,
+  "obj_num": 4,
+  "ref_point": [
+    0.0,
+    -100.0,
+    -100.0,
+    -100.0
+  ],
+  "omegas": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ]
+  ],
+  "points": [
+    [
+      0.1257302210933933,
+      -0.1321048632913019,
+      0.6404226504432821,
+      0.10490011715303971
+    ],
+    [
+      -0.535669373161111,
+      0.36159505490948474,
+      1.3040000451301372,
+      0.9470809631292422
+    ],
+    [
+      -0.7037352358069926,
+      -1.2654214710460525,
+      -0.6232744625373522,
+      0.0413259793472436
+    ],
+    [
+      -2.3250307746388343,
+      -0.21879166393254573,
+      -1.2459109472530652,
+      -0.7322673547034516
+    ],
+    [
+      -0.5442589828573099,
+      -0.31630015636915454,
+      0.4116305363741328,
+      1.0425133694426776
+    ]
+  ],
+  "pareto_front": [
+    [
+      0.1257302210933933,
+      -0.1321048632913019,
+      0.6404226504432821,
+      0.10490011715303971
+    ],
+    [
+      -0.535669373161111,
+      0.36159505490948474,
+      1.3040000451301372,
+      0.9470809631292422
+    ],
+    [
+      -0.5442589828573099,
+      -0.31630015636915454,
+      0.4116305363741328,
+      1.0425133694426776
+    ]
+  ],
+  "hv": 126500.82691587428,
+  "synthetic": true,
+  "fallback_reason": "omega 0 ([1.0, 0.0, 0.0, 0.0]): ValueError: shapes (4,) and (3,) not aligned: 4 (dim 0) != 3 (dim 0)",
+  "artifacts": {
+    "projection_Throughput_vs_Latency": "/experiment/zexin/TetraRL/runs/w7_pareto_orin/projection_Throughput_vs_Latency.png",
+    "projection_Throughput_vs_Energy": "/experiment/zexin/TetraRL/runs/w7_pareto_orin/projection_Throughput_vs_Energy.png",
+    "projection_Throughput_vs_Memory": "/experiment/zexin/TetraRL/runs/w7_pareto_orin/projection_Throughput_vs_Memory.png",
+    "combined": "/experiment/zexin/TetraRL/runs/w7_pareto_orin/pareto_combined.svg"
+  }
+}
