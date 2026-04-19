@@ -1,7 +1,8 @@
 """Generate the two Week 8 ablation paper figures from ``summary.csv``.
 
-Reads ``runs/w8_ablation_orin/summary.csv``, groups rows by ``ablation``,
-and writes two PNGs side-by-side with the Markdown Table 4:
+Reads ``runs/w8_ablation_orin/summary.csv`` (default; override with
+``--runs-dir``), groups rows by ``ablation``, and writes two PNGs
+side-by-side with the Markdown Table 4:
 
   * ``violation_rate_bar.png`` — mean override-fire rate (fires / step)
     per ablation arm with std error bars.
@@ -10,10 +11,13 @@ and writes two PNGs side-by-side with the Markdown Table 4:
 
 Both figures use a colour-blind-friendly palette (Wong 2011) with the
 ``none`` baseline rendered in a distinct shade, and a footer noting that
-the data is from the Mac substitute run while the Orin re-run is pending.
+the data is from the Mac substitute run while the Orin re-run is pending
+(override the footer text with ``--footer "..."``, e.g. for the W8
+real-Orin re-run that closes PR #24's deviation).
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import statistics
 from pathlib import Path
@@ -38,6 +42,8 @@ _ABLATION_ORDER: tuple[str, ...] = (
 )
 
 _FOOTER = "Mac substitute run; Orin re-run pending — see progress.md"
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _read_summary(csv_path: Path) -> list[dict[str, str]]:
@@ -90,6 +96,7 @@ def _make_bar_chart(
     title: str,
     ylabel: str,
     out_path: Path,
+    footer: str = _FOOTER,
 ) -> None:
     fig, ax = plt.subplots(figsize=(8.0, 4.5))
     colours = [_PALETTE.get(arm, "#999999") for arm in arms]
@@ -113,7 +120,7 @@ def _make_bar_chart(
     plt.figtext(
         0.99,
         0.01,
-        _FOOTER,
+        footer,
         ha="right",
         va="bottom",
         fontsize=7,
@@ -125,10 +132,35 @@ def _make_bar_chart(
     plt.close(fig)
 
 
-def main() -> int:
-    repo_root = Path(__file__).resolve().parent.parent
-    csv_path = repo_root / "runs" / "w8_ablation_orin" / "summary.csv"
-    out_dir = csv_path.parent
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Generate the two Week 8 ablation paper figures.",
+    )
+    parser.add_argument(
+        "--runs-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Directory containing summary.csv; the two PNGs are written here "
+            "too. Defaults to <repo>/runs/w8_ablation_orin/."
+        ),
+    )
+    parser.add_argument(
+        "--footer",
+        type=str,
+        default=_FOOTER,
+        help="Footer text rendered at the bottom-right of each PNG.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    runs_dir = args.runs_dir if args.runs_dir is not None else _REPO_ROOT / "runs" / "w8_ablation_orin"
+    csv_path = runs_dir / "summary.csv"
+    out_dir = runs_dir
 
     rows = _read_summary(csv_path)
     grouped = _group_metrics(rows)
@@ -149,6 +181,7 @@ def main() -> int:
         title="Override fire rate per ablation (CartPole, n=3 seeds)",
         ylabel="override_fire_count / n_steps (mean ± std)",
         out_path=out_dir / "violation_rate_bar.png",
+        footer=args.footer,
     )
 
     _make_bar_chart(
@@ -161,6 +194,7 @@ def main() -> int:
         ),
         ylabel="n_steps (mean ± std)",
         out_path=out_dir / "hv_comparison.png",
+        footer=args.footer,
     )
 
     print(f"[figs] wrote {out_dir / 'violation_rate_bar.png'}")
