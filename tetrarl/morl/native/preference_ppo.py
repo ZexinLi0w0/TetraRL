@@ -282,7 +282,6 @@ def evaluate_policy(
     Returns the mean multi-objective return across episodes.
     """
     discrete = isinstance(env.action_space, gym.spaces.Discrete)
-    act_dim = env.action_space.n if discrete else None
     is_graph = isinstance(env.observation_space, gym.spaces.Dict)
     all_returns: list[np.ndarray] = []
     for _ in range(n_episodes):

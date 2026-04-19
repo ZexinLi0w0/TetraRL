@@ -21,7 +21,6 @@ from typing import Callable, Literal, Optional, Union
 
 from tetrarl.sys.platforms import Platform, get_profile
 
-
 _RAM_RE = re.compile(r"RAM\s+(\d+)/(\d+)MB")
 _CPU_RE = re.compile(r"CPU\s+\[([^\]]+)\]")
 _GR3D_RE = re.compile(r"GR3D_FREQ\s+(\d+)%@\[?(\d+)\]?")

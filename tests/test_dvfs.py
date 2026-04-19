@@ -4,10 +4,10 @@ from __future__ import annotations
 import pytest
 
 from tetrarl.sys.dvfs import (
-    DVFSConfig,
-    DVFSController,
     STUB_CPU_FREQS_KHZ,
     STUB_GPU_FREQS_HZ,
+    DVFSConfig,
+    DVFSController,
     TransitionLatency,
 )
 from tetrarl.sys.platforms import Platform

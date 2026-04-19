@@ -26,7 +26,7 @@ import json
 import statistics  # noqa: F401  -- kept for downstream extensions
 import subprocess
 import time
-from typing import Iterable, Literal, Optional, Sequence
+from typing import Literal, Optional, Sequence
 
 # stdlib only per spec; numpy is intentionally avoided.
 

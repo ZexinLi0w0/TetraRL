@@ -1,17 +1,15 @@
 """Integration: TetraRLNativeAgent + GCN extractor on DAG scheduling env."""
 from __future__ import annotations
 
-import numpy as np
 import pytest
 import torch
 
-from tetrarl.envs.dag_scheduler import DAGSchedulerEnv, DAGReadyMask
+from tetrarl.envs.dag_scheduler import DAGReadyMask, DAGSchedulerEnv
 from tetrarl.morl.native.agent import TetraRLNativeAgent
 from tetrarl.morl.native.gnn_extractor import GCNFeatureExtractor
 from tetrarl.morl.native.preference_ppo import (
     PreferenceNetwork,
     PreferencePPOConfig,
-    evaluate_policy,
     train_preference_ppo,
 )
 
@@ -69,7 +67,8 @@ def test_train_preference_ppo_runs_on_dag_with_gnn():
         n_eval_interior=2,
         ref_point=[0.0, -50.0, -50.0],
     )
-    env_fn = lambda: DAGSchedulerEnv(n_tasks=4, density=0.3, seed=0)
+    def env_fn():
+        return DAGSchedulerEnv(n_tasks=4, density=0.3, seed=0)
     gnn = GCNFeatureExtractor(in_dim=4, hidden_dim=16, out_dim=16)
     results = train_preference_ppo(
         config, env_fn, device="cpu", verbose=False,

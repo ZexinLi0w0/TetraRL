@@ -15,7 +15,6 @@ from typing import Any
 
 import numpy as np
 
-
 _CMORL_DIR = Path(__file__).resolve().parent / "c_morl"
 
 

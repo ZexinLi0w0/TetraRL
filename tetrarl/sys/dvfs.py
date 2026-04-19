@@ -23,7 +23,6 @@ from tetrarl.sys.platforms import (
     get_profile,
 )
 
-
 # Backward-compat module-level aliases. These mirror the Orin AGX profile and
 # are kept because pre-refactor tests (and external callers) import them.
 STUB_CPU_FREQS_KHZ: list[int] = list(PLATFORM_PROFILES[Platform.ORIN_AGX].cpu_freqs_hz)

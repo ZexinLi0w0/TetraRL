@@ -15,9 +15,6 @@ from __future__ import annotations
 import math
 
 from scripts.week6_e2e_smoke import (
-    RandomArbiter,
-    StubTelemetrySource,
-    make_framework,
     run_smoke,
 )
 

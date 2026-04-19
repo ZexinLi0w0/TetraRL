@@ -12,6 +12,7 @@ from tetrarl.morl.agents.a3c import A3CAgent  # noqa: F401
 from tetrarl.morl.agents.c51 import C51Agent  # noqa: F401
 from tetrarl.morl.agents.ddqn import DDQNAgent  # noqa: F401
 from tetrarl.morl.agents.dqn import DQNAgent  # noqa: F401
+
 # MOSACHERAgent deprecated -> tetrarl/morl/_deprecated/mo_sac_her.py
 from tetrarl.morl.agents.pd_morl import PDMORLAgent  # noqa: F401
 from tetrarl.morl.agents.ppo import PPOAgent  # noqa: F401

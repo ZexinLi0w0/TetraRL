@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 
 from tetrarl.envs.dag_scheduler import (
-    DAGSchedulerEnv,
     DAGReadyMask,
+    DAGSchedulerEnv,
     generate_random_dag,
 )
 
