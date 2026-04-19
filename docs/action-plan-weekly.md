@@ -148,28 +148,43 @@
 
 ---
 
-### Week 7 (2026-06-01 to 2026-06-07)
-**Theme**: Full closed-loop validation with SAC + PPO on Orin AGX
+### Week 7 (2026-06-01 to 2026-06-07) — REVISED 2026-04-18
+**Theme**: Full closed-loop validation on Orin AGX **+** parallel Jetson Nano porting
+
+> **Plan revision (2026-04-18)**: Per user direction, multi-platform scope is reduced to **Orin AGX + Jetson Nano** only (Xavier NX dropped — hardware not available). Nano porting tasks originally scheduled in Week 9 are pulled forward into Week 7 to run in parallel with the Orin closed-loop validation. Week 9 is correspondingly re-scoped (see Week 9 below).
 
 **Concrete tasks**:
-1. Run C-MORL (off-policy) on DonkeyCar simulator with DVFS + tegrastats on Orin AGX for 500 episodes. Sweep 5 representative preference vectors ω (one-hot corners + center).
+
+*Track A — Orin AGX closed-loop (primary):*
+1. Run C-MORL / TetraRL-Native (off-policy variant if available, else PPO native) on DonkeyCar simulator with DVFS + tegrastats on Orin AGX for 500 episodes. Sweep 5 representative preference vectors ω (one-hot corners + center).
 2. Run PPO-Lagrangian (on-policy) on PyBullet-HalfCheetah with the unified knob mapper (`n_steps`, `n_epochs`, `mini_batch_size` as knobs per §9.2) on Orin AGX. Validate that the Lagrangian dual variables converge and constraints are respected (with override layer as safety net).
 3. Implement the "thinking-while-moving" concurrent decision trick from DVFO (Zhang TMC 2023) in `tetrarl/sys/concurrent.py` — overlap DVFS decision computation with RL forward pass to mask decision-loop overhead.
-4. Generate Pareto front visualization: 2-D projections of the 4-D Pareto front (T vs. A, E vs. A, M vs. A) for the DonkeyCar-SAC runs. Compute HV indicator.
-5. Run the co-runner FFmpeg interference test (R³ protocol, Fig. 15): 720p / 1080p / 2K background video decoding while training. Log tail-latency shifts.
+4. Generate Pareto front visualization: 2-D projections of the 4-D Pareto front (T vs. A, E vs. A, M vs. A) for the DonkeyCar-SAC runs on Orin. Compute HV indicator.
+5. Run the co-runner FFmpeg interference test (R³ protocol, Fig. 15) on Orin: 720p / 1080p / 2K background video decoding while training. Log tail-latency shifts.
+
+*Track B — Jetson Nano porting (parallel, pulled from Week 9):*
+6. Port `tetrarl/sys/tegra_daemon.py` and `tetrarl/sys/dvfs.py` to Jetson Nano. Adjust frequency tables (Nano CPU/GPU sysfs paths differ from Orin AGX) and EMA filter parameters per platform. Re-profile DVFS transition latencies on Nano and produce a transition-latency table.
+7. Run a reduced-scope experiment on Jetson Nano (CartPole + Classic Control only, due to 4 GB memory constraint). Validate that the override layer correctly prevents OOM on Nano under stress (override fire_count ≥ 1 over the run).
+8. Collect tail-latency CDFs on **Orin and Nano** for the same preference vector. Generate a 2-panel CDF figure (Orin / Nano) — paper Figure candidate.
 
 **Deliverables**:
 - `tetrarl/sys/concurrent.py` — decision-loop overhead masking
 - 4-D Pareto front scatter plots (3 × 2-D projections) for DonkeyCar-SAC on Orin — paper-figure-ready
 - FFmpeg co-runner interference table (tail-latency 99th percentile at 720p/1080p/2K) — paper-figure-ready
+- Jetson Nano DVFS transition latency table — paper Table candidate
+- 2-platform tail-latency CDF figure (Orin / Nano) — paper Figure candidate
+- Nano-CartPole training log proving override-driven OOM prevention
 
 **Validation criteria**:
-- DonkeyCar-SAC achieves ≥70% of MAX-A reward while maintaining zero deadline misses under the center preference ω = [0.25, 0.25, 0.25, 0.25].
-- PPO-Lagrangian constraint violation rate is < 20% of episodes (with override layer active).
-- FFmpeg co-runner at 1080p does not increase 99th-percentile latency by more than 2× relative to the no-interference case.
+- DonkeyCar achieves ≥70% of MAX-A reward while maintaining zero deadline misses under the center preference ω = [0.25, 0.25, 0.25, 0.25] on Orin.
+- PPO-Lagrangian constraint violation rate is < 20% of episodes (with override layer active) on Orin.
+- FFmpeg co-runner at 1080p does not increase 99th-percentile latency by more than 2× relative to the no-interference case on Orin.
+- Jetson Nano completes CartPole training without OOM (override layer triggers ≥ 1 time during the run, confirming its activation on constrained hardware).
 
 **Risk / Pitfall to watch**:
 - If PPO uses multi-processing via `n_envs`, lowering the CPU frequency will cause env process progress to desynchronize, leading to straggler tail latencies (§9.7 pitfall 3). Use `n_envs = 1` initially; multi-env scaling is deferred to Week 9.
+- Jetson Nano sysfs DVFS interfaces differ from Orin AGX (different cpufreq/devfreq layout). Allow ~1 day of buffer for Nano-specific path discovery; gate sysfs writes behind `--allow-real-dvfs` flag during porting.
+- Code work on this and later weeks must go through Claude Code CLI with the **superpowers** plugin enabled (per project convention 2026-04-18). Do not write production code from the OpenClaw main session directly.
 
 ---
 
@@ -197,38 +212,41 @@
 
 ---
 
-## Phase III — Multi-Platform Scaling & Paper Draft (Weeks 9–12)
+## Phase III — Multi-Platform Consolidation & Paper Draft (Weeks 9–12, REVISED 2026-04-18)
 
-### Week 9 (2026-06-15 to 2026-06-21)
-**Theme**: Porting to Xavier NX and Jetson Nano
+### Week 9 (2026-06-15 to 2026-06-21) — REVISED 2026-04-18
+**Theme**: Nano deep-validation + DVFS-DRL-Multitask baseline + cross-platform consolidation
+
+> **Plan revision (2026-04-18)**: Original Week 9 (Xavier NX + Nano porting) is replaced. Xavier NX is dropped (hardware unavailable). Nano porting moved to Week 7 Track B. This week now consolidates Nano deep-validation, the DVFS-DRL-Multitask baseline, and the multi-env scaling deferred from Week 7.
 
 **Concrete tasks**:
-1. Port the tegrastats daemon and DVFS controller to Xavier NX and Jetson Nano. Adjust frequency tables and EMA filter parameters per platform. Re-profile DVFS transition latencies.
-2. Run the full C-MORL pipeline on Xavier NX (DonkeyCar, 500 episodes, 5 preference vectors). Adjust super-block granularity N if DVFS overhead differs from Orin.
-3. Run a reduced-scope experiment on Jetson Nano (CartPole + Classic Control only, due to memory constraints). Validate that the override layer correctly prevents OOM on Nano's 4 GB memory.
-4. Incorporate the DVFS-DRL-Multitask (2024) soft-deadline reward shaping (Algorithm 3) as an additional baseline. Run on all 3 platforms.
-5. Collect tail-latency CDFs across all 3 platforms for the same preference vector. Generate a 3-panel CDF figure (one per platform).
+1. Run the full DonkeyCar pipeline on Jetson Nano (reduced episode count if memory bound, e.g. 200 episodes, 3 preference vectors instead of 5). Confirm Pareto front shape relative to Orin; document any compute-bottleneck-induced shape changes.
+2. Re-fit the RBF interpolator on Nano if HV drops below 50% of Orin's on the same DonkeyCar task (§3 Idea 3 failure mode — bottleneck shifts between CPU/GPU-bound regimes are non-linear across architectures).
+3. Incorporate the DVFS-DRL-Multitask (2024) soft-deadline reward shaping (Algorithm 3) as an additional baseline. Run on **both Orin and Nano**.
+4. Re-enable PPO multi-env (`n_envs > 1`) on Orin, the multi-env scaling deferred from Week 7. Document the `n_envs` × DVFS-frequency interaction (per §9.7 pitfall 3 straggler tail latencies).
+5. Cross-platform tail-latency CDF expansion: extend the Week 7 Orin/Nano 2-panel figure with per-preference-vector breakdowns.
 
 **Deliverables**:
-- Platform-specific DVFS transition latency tables for Xavier NX and Jetson Nano
-- 3-platform tail-latency CDF figure (Orin / Xavier NX / Nano) — paper Figure candidate
-- DVFS-DRL-Multitask baseline results on all 3 platforms
+- Nano DonkeyCar Pareto-front data (paper-figure-ready)
+- DVFS-DRL-Multitask baseline results on Orin and Nano
+- Multi-env scaling results table (`n_envs` ∈ {1, 2, 4} × {fixed-freq, DVFS-on})
+- Expanded tail-latency CDF figure with preference-vector breakdowns
 
 **Validation criteria**:
-- Xavier NX achieves ≥60% of Orin's HV on the same DonkeyCar task (accounting for reduced compute).
-- Jetson Nano completes CartPole training without OOM (override layer triggers ≥ 1 time during the run, confirming its activation on constrained hardware).
-- DVFS-DRL-Multitask baseline runs to completion on all 3 platforms without crashes.
+- Nano DonkeyCar completes 200 episodes without OOM (override active).
+- DVFS-DRL-Multitask baseline runs to completion on both Orin and Nano without crashes.
+- Multi-env scaling does not cause > 3× tail-latency degradation when DVFS is active (otherwise document as a known limitation).
 
 **Risk / Pitfall to watch**:
 - The bottleneck shift between CPU-bound and GPU-bound tasks across different architectures is non-linear (§3 Idea 3 failure mode). The RBF interpolator trained on Orin data may produce mis-projections on Nano. Re-fit the interpolator per platform if HV drops below 50% of Orin's.
 
 ---
 
-### Week 10 (2026-06-22 to 2026-06-28)
-**Theme**: Full metric collection and Pareto-front analysis
+### Week 10 (2026-06-22 to 2026-06-28) — REVISED 2026-04-18
+**Theme**: Full metric collection and Pareto-front analysis (Orin + Nano, no Xavier NX)
 
 **Concrete tasks**:
-1. Run the complete evaluation matrix: {SAC, PPO} × {Orin, Xavier NX, Nano} × {5 preference vectors} × {3 seeds}. Collect all metrics: HV, tail-latency 99th, energy per step (J), memory peak (MB), reward.
+1. Run the complete evaluation matrix: {SAC, PPO} × {Orin, Nano} × {5 preference vectors} × {3 seeds}. Collect all metrics: HV, tail-latency 99th, energy per step (J), memory peak (MB), reward. (Nano reduced scope: CartPole + DonkeyCar-reduced as feasible.)
 2. Compute and plot Hypervolume (HV) graphs with ablation lines: PD-MORL (ours) vs. Envelope MORL (Yang 2019) vs. PPO-Lagrangian vs. FOCOPS (Zhang 2020) vs. DuoJoule vs. MAX-A vs. MAX-P. Apply PCN (Reymond 2022) as a discrete-action baseline if applicable.
 3. Generate the Reward vs. Wall-clock Time and Reward vs. Cumulative Energy (Joules) plots (per §9.6: not Reward vs. Steps, which is unfair to on-policy algorithms).
 4. Produce the dynamic preference-switching demonstration: a time-series showing smooth transitions as ω changes mid-episode (e.g., simulating "low battery → increase w_E").
@@ -236,7 +254,7 @@
 
 **Deliverables**:
 - Complete evaluation results spreadsheet (`eval/full_results.csv`)
-- HV comparison bar chart (7 methods × 3 platforms) — paper Figure candidate
+- HV comparison bar chart (7 methods × 2 platforms) — paper Figure candidate
 - Reward vs. Wall-clock / Reward vs. Energy plots — paper Figure candidate
 - Dynamic preference-switching time-series — paper Figure candidate
 - Lagrangian + Override constraint satisfaction table — paper Table candidate
@@ -251,55 +269,64 @@
 
 ---
 
-### Week 11 (2026-06-29 to 2026-07-05)
-**Theme**: Paper draft — structure, figures, and Related Work
+### Week 11 (2026-06-29 to 2026-07-05) — REVISED 2026-04-18
+**Theme**: Final figures, buffer, supplementary experiments
+
+> **Plan revision (2026-04-18)**: Paper draft pushed to Week 12. This week is used for finalizing all paper-ready figures and tables, running any gap-filling experiments, and preparing the supplementary material. Also includes the Nano-GRPO micro-benchmark appendix.
 
 **Concrete tasks**:
-1. Write the paper skeleton in LaTeX: Title, Abstract, Introduction (with "Differences from Prior Conference Papers R³ and DuoJoule" subsection per §6), System Model, Architecture, Algorithm, Evaluation, Related Work, Limitations, Conclusion.
-2. Produce all final figures: (a) Architecture diagram showing the four-component framework with kernel/user space interactions, (b) 4-D Pareto front projections, (c) tail-latency CDFs, (d) HV comparison, (e) ablation table, (f) overhead table, (g) dynamic preference switching, (h) training curves.
-3. Write the Related Work section covering: MORL (PD-MORL, Envelope, PG-MORL, PCN), Edge ML (DVFO, DVFS-DRL-Multitask, SparseDVFS), Constrained RL (CPO, FOCOPS, OmniSafe), and prior group work (R³, DuoJoule, NeuOS, RED, RT-LM, BOXR, MIMONet). Reference GRPO/DAPO in the Discussion as future work per §9.3.
-4. Write the Limitations paragraph (§7 items 1–7): DVFS transition overhead, non-stationary Pareto fronts, thermal throttling, OS/ROS interference, replay buffer fragmentation, Lagrangian constraint violation, and interpolator quality at discontinuities.
-5. Draft the System and Resource Model section early in the paper: GPU unified-memory contention model and DVFS state-machine transition delay model (per §6 TC editorial preferences).
+1. Produce all final figures: (a) Architecture diagram showing the four-component framework with kernel/user space interactions, (b) 4-D Pareto front projections, (c) tail-latency CDFs (Orin/Nano), (d) HV comparison, (e) ablation table, (f) overhead table, (g) dynamic preference switching, (h) training curves.
+2. Prepare the Nano-GRPO micro-benchmark appendix (§9.3): a minimalist RLHF task for TinyLlama/Phi-3 on Orin AGX measuring system-level response curves, proving generality without requiring perfect alignment. Include critic-elimination as a discrete action knob (GRPO Shao 2024).
+3. Re-run any experiments where gaps are identified (e.g., additional seeds, missing baselines, Nano-specific edge cases). Reserve 2 days as buffer.
+4. Prepare supplementary material: (a) full hyperparameter tables, (b) per-seed raw data CSV, (c) code repository README with reproduction instructions.
+5. Final figure polish: ensure all figures are vector PDFs where possible, legible at 300 DPI print resolution, and labeled consistently.
 
 **Deliverables**:
-- LaTeX draft with all sections populated (≥ 12 pages, double-column TC format)
 - All figures finalized as vector PDFs in `paper/figures/`
-- Complete bibliography (≥ 50 references)
+- Nano-GRPO appendix data + figure
+- Supplementary material package (hyperparameters, raw data, code)
+- Gap-filling experiment results (if any)
 
 **Validation criteria**:
-- The "Differences from Prior Conference Papers" subsection explicitly enumerates ≥ 5 architectural differences from R³ and ≥ 3 from DuoJoule, demonstrating > 50% new material.
 - All figures are legible at print resolution (300 DPI minimum for raster elements).
-- The Limitations paragraph covers all 7 items from the brainstorm document.
+- Supplementary material covers every experimental claim (each claim traceable to a specific CSV/figure).
+- Nano-GRPO appendix demonstrates measurable system-level response curves on Orin.
 
 **Risk / Pitfall to watch**:
-- The paper must not read as a pure RL algorithm derivation (§6 TC scope match). Ensure the narrative centers on "embedded runtime system that integrates MORL" rather than "new MORL algorithm applied to edge." The architecture diagram and system model must appear before the algorithm section.
+- If Week 10 experiments are delayed, this week's buffer must absorb the overflow. Prioritize figure generation over supplementary polish.
 
 ---
 
-### Week 12 (2026-07-06 to 2026-07-12)
-**Theme**: Paper polishing, internal review, and submission preparation
+### Week 12 (2026-07-06 to 2026-07-12) — REVISED 2026-04-18
+**Theme**: Paper draft, internal review, and submission preparation
+
+> **Plan revision (2026-04-18)**: Per user direction, the full paper draft is written in Week 12 (not earlier). All experimental data, figures, and supplementary material should be complete by Week 11.
 
 **Concrete tasks**:
-1. Conduct an internal review cycle: circulate the draft for feedback, address all comments, and refine the writing.
-2. Re-run any experiments where reviewer feedback identifies gaps (e.g., additional seeds, missing baselines, clarification experiments).
-3. Prepare the supplementary material: (a) full hyperparameter tables, (b) per-seed raw data, (c) code repository README with reproduction instructions.
-4. Write the cover letter for TC submission, emphasizing the ≥ 50% new material over R³/DuoJoule and the multi-platform evaluation.
-5. Final proofreading pass: verify all figure references, table numbering, equation formatting, and bibliography completeness. Run a plagiarism self-check.
-6. Prepare the Nano-GRPO micro-benchmark appendix (§9.3): a minimalist RLHF task for TinyLlama/Phi-3 on Orin AGX measuring system-level response curves, proving generality without requiring perfect alignment. Include critic-elimination as a discrete action knob (GRPO Shao 2024).
+1. Write the full paper in LaTeX: Title, Abstract, Introduction (with "Differences from Prior Conference Papers R³ and DuoJoule" subsection per §6), System Model, Architecture, Algorithm, Evaluation, Related Work, Limitations, Conclusion.
+2. Write the Related Work section covering: MORL (PD-MORL, Envelope, PG-MORL, PCN), Edge ML (DVFO, DVFS-DRL-Multitask, SparseDVFS), Constrained RL (CPO, FOCOPS, OmniSafe), and prior group work (R³, DuoJoule, NeuOS, RED, RT-LM, BOXR, MIMONet). Reference GRPO/DAPO in the Discussion as future work per §9.3.
+3. Write the Limitations paragraph (§7 items 1–7): DVFS transition overhead, non-stationary Pareto fronts, thermal throttling, OS/ROS interference, replay buffer fragmentation, Lagrangian constraint violation, and interpolator quality at discontinuities.
+4. Draft the System and Resource Model section early in the paper: GPU unified-memory contention model and DVFS state-machine transition delay model (per §6 TC editorial preferences).
+5. Conduct internal review: circulate draft, address comments, refine writing.
+6. Write the cover letter for TC submission, emphasizing the ≥ 50% new material over R³/DuoJoule and the 2-platform (Orin + Nano) evaluation.
+7. Final proofreading pass: verify all figure references, table numbering, equation formatting, and bibliography completeness. Run a plagiarism self-check.
 
 **Deliverables**:
-- Final camera-ready LaTeX PDF
-- Supplementary material package (hyperparameters, raw data, code)
+- Complete LaTeX draft with all sections populated (≥ 12 pages, double-column TC format)
+- Complete bibliography (≥ 50 references)
 - Cover letter for TC submission
-- Nano-GRPO appendix demonstrating LLM generality
+- Final camera-ready LaTeX PDF
 
 **Validation criteria**:
-- All experimental claims in the paper are backed by data in the supplementary material (each claim traceable to a specific CSV/figure).
+- The "Differences from Prior Conference Papers" subsection explicitly enumerates ≥ 5 architectural differences from R³ and ≥ 3 from DuoJoule, demonstrating > 50% new material.
+- The Limitations paragraph covers all 7 items from the brainstorm document.
 - The paper compiles without LaTeX warnings.
-- Internal reviewers confirm that all 4 stated contributions (§6) are substantiated by the evaluation.
+- All experimental claims in the paper are backed by data in the supplementary material.
+- The paper narrative centers on "embedded runtime system that integrates MORL" rather than "new MORL algorithm applied to edge." The architecture diagram and system model appear before the algorithm section (per §6 TC scope match).
 
 **Risk / Pitfall to watch**:
 - The ≥ 30% new material requirement (§6) is the single most common rejection reason for journal extensions. The cover letter must explicitly map each new section/experiment to a percentage of the total paper. Allocate time for a careful accounting.
+- Writing the full draft in one week is aggressive. Mitigate by having the LaTeX skeleton, all figures, and related work references prepared in Week 11. Week 12 should focus on prose, not figure generation.
 
 ---
 
@@ -310,9 +337,11 @@ Week 1 ──→ Week 2 ──→ Week 3 ──→ Week 4  (sequential: algorith
                                     │
                                     ▼
               Week 5 ──→ Week 6 ──→ Week 7 ──→ Week 8  (sequential: systems integration)
+                                     │ (Track B)    │
+                                     └─ Nano port ──┘
                                                  │
                                                  ▼
-                          Week 9 ──→ Week 10 ──→ Week 11 ──→ Week 12  (sequential: eval + writing)
+                          Week 9 ──→ Week 10 ──→ Week 11 ──→ Week 12  (eval + figures + paper)
 ```
 
 **Critical path**: Weeks 1 → 2 → 3 → 5 → 6 → 7 → 10 → 11 → 12
@@ -322,10 +351,13 @@ Week 1 ──→ Week 2 ──→ Week 3 ──→ Week 4  (sequential: algorith
 - **Week 4 is semi-independent**: PPO-Lagrangian baseline and override layer can be developed in parallel with Week 3, but both must be ready before Week 6 integration.
 - **Week 5 blocks Week 6**: Tegrastats daemon and DVFS controller must function before the four-component framework can be wired.
 - **Week 6 blocks Week 7**: The framework must run end-to-end before full closed-loop validation.
+- **Week 7 Track B (Nano port)** runs in parallel with Track A (Orin closed-loop). Nano porting (originally Week 9) is pulled forward.
 - **Week 7 blocks Week 10**: Orin AGX Pareto front data is needed for the full evaluation matrix.
-- **Week 8 blocks Week 11**: Ablation results and overhead tables are required for the paper draft.
-- **Week 9 is partially independent**: Xavier NX and Nano porting can begin as soon as Week 6 is complete (code runs on Orin); full data collection requires the evaluation harness from Week 8.
-- **Week 10 blocks Week 11**: All figures and tables must be generated before the paper draft.
+- **Week 8 blocks Week 11**: Ablation results and overhead tables are required for final figures.
+- **Week 9 consolidates Nano deep-validation** and DVFS-DRL-Multitask baseline on both platforms.
+- **Week 10 blocks Week 11**: All figures and tables must be generated before Week 11 figure finalization.
+- **Week 11 blocks Week 12**: All figures, supplementary material, and Nano-GRPO appendix must be ready before paper writing begins.
+- **Week 12 = paper draft + submit** (no earlier paper writing). Aggressive but feasible if Weeks 10-11 deliver complete data/figures.
 
 ---
 
@@ -341,12 +373,12 @@ Week 1 ──→ Week 2 ──→ Week 3 ──→ Week 4  (sequential: algorith
 | Week 6 | 0 days (tight) | This is the highest-risk week (full integration). If blocked, delay Week 7 experiments and use Week 8 buffer |
 | Week 7 | 0.5 days | DonkeyCar experiments are long-running; parallelizable with PPO runs |
 | Week 8 | 1.5 days | Explicitly reserved as integration buffer for Weeks 5–7 spillover |
-| Week 9 | 1 day | Xavier NX port is a subset of Orin code; Nano may require memory-specific workarounds |
+| Week 9 | 1 day | Nano deep-validation + DVFS-DRL-Multitask baseline; memory-specific workarounds may be needed |
 | Week 10 | 0.5 days | Evaluation runs are parallelizable across platforms; bottleneck is Nano's slow training |
-| Week 11 | 0 days (tight) | Paper writing is on the critical path; no buffer — start figure production in Week 10 if possible |
-| Week 12 | 2 days | Explicitly reserved as paper-polishing buffer; re-run experiments only if gaps are identified |
+| Week 11 | 1 day | Final figures + supplementary; buffer for Week 10 overflow |
+| Week 12 | 0 days (tight) | Full paper draft + submit — no buffer; all data/figures must be done by Week 11 |
 
-**Global contingency**: If Weeks 6–7 encounter show-stopping hardware issues (e.g., Orin kernel bugs, DVFS driver incompatibilities), the fallback plan is to demonstrate the full 4-D system on the desktop GPU with simulated DVFS/energy and port to Orin for a reduced evaluation (Orin-only, no Xavier NX/Nano). This sacrifices the multi-platform contribution but preserves the algorithmic and systems architecture contributions.
+**Global contingency**: If Weeks 6–7 encounter show-stopping hardware issues (e.g., Orin kernel bugs, DVFS driver incompatibilities), the fallback plan is to demonstrate the full 4-D system on the desktop GPU with simulated DVFS/energy and port to Orin for a reduced evaluation (Orin-only, no Nano). This sacrifices the multi-platform contribution but preserves the algorithmic and systems architecture contributions. Xavier NX has been removed from the plan (hardware unavailable).
 
 **Method Borrowing Map reference**: The following papers are actively applied across the 12 weeks:
 
@@ -359,7 +391,7 @@ Week 1 ──→ Week 2 ──→ Week 3 ──→ Week 4  (sequential: algorith
 | CPO (Achiam 2017) | 4, 8 | Recovery step for hardware override |
 | FOCOPS (Zhang 2020) | 4, 10 | First-order constrained RL ablation arm |
 | OmniSafe (Ji 2023) | 4 | Starting codebase for PPO-Lagrangian |
-| DVFS-DRL-Multitask (2024) | 5, 9 | Kernel/user tegrastats split, soft-deadline reward shaping |
+| DVFS-DRL-Multitask (2024) | 5, 7, 9 | Kernel/user tegrastats split, soft-deadline reward shaping |
 | DVFO (Zhang 2023) | 7, 8 | Concurrent decision trick, latency-per-mJ metric |
 | SparseDVFS (2025) | 5 | Super-block DVFS granularity |
 | NeuOS (Bateni 2020) | 8 | LAG metric for co-running state |
