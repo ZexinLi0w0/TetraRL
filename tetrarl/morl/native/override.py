@@ -10,9 +10,9 @@ proposed action and reward, while the executor swaps in `fallback_action`.
 This keeps learning unaffected and lets us audit how often the override fires.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 from typing import Any
-import numpy as np
 
 
 @dataclass

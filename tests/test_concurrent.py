@@ -17,14 +17,10 @@ from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass
 from typing import Optional
-
-import pytest
 
 from tetrarl.morl.native.override import HardwareTelemetry
 from tetrarl.sys.concurrent import ConcurrentDecisionLoop
-
 
 # ---------------------------------------------------------------------------
 # Test doubles

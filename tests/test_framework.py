@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 
 from tetrarl.core.framework import (
-    TetraRLFramework,
-    StaticPreferencePlane,
     ResourceManager,
+    StaticPreferencePlane,
+    TetraRLFramework,
 )
 from tetrarl.morl.native.override import (
     HardwareTelemetry,

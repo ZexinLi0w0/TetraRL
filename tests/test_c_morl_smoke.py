@@ -4,12 +4,10 @@ Validates that the vendored code is structurally intact and that
 CMORLAgent can be instantiated without heavyweight dependencies.
 """
 
-import importlib
-from pathlib import Path
 
 import pytest
 
-from tetrarl.morl.c_morl_agent import CMORLAgent, CMORLConfig, _CMORL_DIR
+from tetrarl.morl.c_morl_agent import _CMORL_DIR, CMORLAgent, CMORLConfig
 
 
 class TestVendoredStructure:

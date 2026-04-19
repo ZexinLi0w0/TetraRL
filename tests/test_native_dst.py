@@ -103,17 +103,17 @@ def run_full_smoke_test():
         seed=42,
         device="cpu",
     )
-    results = agent.train(verbose=True)
+    agent.train(verbose=True)
     front = agent.get_pareto_front()
 
     print(f"\n{'='*50}")
     print(f"Final HV: {front['hv']:.2f}")
     print(f"|Pareto front|: {len(front['objectives'])}")
-    print(f"Pareto front objectives:")
+    print("Pareto front objectives:")
     for i, obj in enumerate(front["objectives"]):
         print(f"  [{i}] treasure={obj[0]:.1f}, time={obj[1]:.1f}")
 
-    print(f"\nHV history:")
+    print("\nHV history:")
     for step, hv, n_pf in front["hv_history"]:
         print(f"  step={step:>7d}  HV={hv:>8.2f}  |PF|={n_pf}")
 

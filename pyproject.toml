@@ -29,7 +29,12 @@ include = ["tetrarl*"]
 
 [tool.ruff]
 target-version = "py310"
-line-length = 88
+line-length = 120
+extend-exclude = [
+    "tetrarl/morl/c_morl",
+]
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]

@@ -43,7 +43,6 @@ from tetrarl.morl.native.override import (
     OverrideLayer,
 )
 
-
 # ---------------------------------------------------------------------------
 # Lagrangian multipliers
 # ---------------------------------------------------------------------------
@@ -396,7 +395,7 @@ def train_ppo_lagrangian(
         except TypeError:
             return telemetry_fn()  # type: ignore[call-arg]
 
-    rng = np.random.default_rng(ppo_config.seed)
+    np.random.default_rng(ppo_config.seed)
     torch.manual_seed(ppo_config.seed)
     np.random.seed(ppo_config.seed)
 

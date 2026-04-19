@@ -7,7 +7,6 @@ correctly while keeping the default-OFF baseline backward compatible.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from tetrarl.morl.native.agent import TetraRLNativeAgent
@@ -16,7 +15,6 @@ from tetrarl.morl.native.override import (
     HardwareTelemetry,
     OverrideThresholds,
 )
-
 
 _COMMON_KW = dict(
     env_name="dst",
@@ -55,7 +53,8 @@ def test_masking_with_noop_does_not_break():
 
 def test_override_fires_when_telemetry_bad():
     """A telemetry source that always violates must trip the override."""
-    bad_tele = lambda: HardwareTelemetry(latency_ema_ms=999.0)
+    def bad_tele():
+        return HardwareTelemetry(latency_ema_ms=999.0)
 
     kw = dict(_COMMON_KW)
     kw["total_timesteps"] = 1_000

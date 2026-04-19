@@ -13,7 +13,6 @@ from tetrarl.sys.tegra_daemon import (
     parse_tegrastats_line,
 )
 
-
 FIXTURE = Path(__file__).parent / "fixtures" / "tegra_sample.txt"
 NANO_FIXTURE = Path(__file__).parent / "fixtures" / "tegrastats_nano_sample.txt"
 
