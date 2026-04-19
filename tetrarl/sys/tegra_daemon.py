@@ -3,6 +3,10 @@
 Samples at sample_hz (default 100), dispatches EMA-filtered readings to a
 callback at dispatch_hz (default 10). Mac-friendly: pass `source="file:<path>"`
 to read from a captured tegrastats fixture instead of the binary.
+
+Per-platform layout knobs (tegrastats power-rail field names, EMA defaults)
+live in ``tetrarl.sys.platforms``. Pass ``platform=Platform.NANO`` (or the
+string ``"nano"``) to drive a Jetson Nano; the default remains Orin AGX.
 """
 from __future__ import annotations
 
@@ -13,7 +17,9 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Literal, Optional, Union
+
+from tetrarl.sys.platforms import Platform, get_profile
 
 
 _RAM_RE = re.compile(r"RAM\s+(\d+)/(\d+)MB")
@@ -22,6 +28,8 @@ _GR3D_RE = re.compile(r"GR3D_FREQ\s+(\d+)%@\[?(\d+)\]?")
 _GPU_TEMP_RE = re.compile(r"GPU@([\d.]+)C")
 _VDD_GPU_RE = re.compile(r"VDD_GPU_SOC\s+(\d+)mW")
 _VDD_CPU_RE = re.compile(r"VDD_CPU_CV\s+(\d+)mW")
+_POM_GPU_RE = re.compile(r"POM_5V_GPU\s+(\d+)/\d+")
+_POM_CPU_RE = re.compile(r"POM_5V_CPU\s+(\d+)/\d+")
 _EMC_RE = re.compile(r"EMC_FREQ\s+(\d+)%@(\d+)")
 
 
@@ -41,7 +49,17 @@ class TegrastatsReading:
     vdd_cpu_cv_mw: int = 0
 
 
-def parse_tegrastats_line(line: str) -> Optional[TegrastatsReading]:
+def parse_tegrastats_line(
+    line: str, layout: Literal["orin", "nano"] = "orin"
+) -> Optional[TegrastatsReading]:
+    """Parse a single tegrastats line.
+
+    The ``layout`` argument selects the power-rail regex set:
+    - "orin": ``VDD_GPU_SOC`` / ``VDD_CPU_CV`` (Jetson Orin AGX/NX/Nano-Orin).
+    - "nano": ``POM_5V_GPU`` / ``POM_5V_CPU`` (legacy Jetson Nano L4T 32.x).
+    Both layouts populate the same ``vdd_gpu_soc_mw`` / ``vdd_cpu_cv_mw``
+    fields so downstream consumers see uniform names regardless of platform.
+    """
     if not line or not line.strip():
         return None
 
@@ -85,13 +103,22 @@ def parse_tegrastats_line(line: str) -> Optional[TegrastatsReading]:
     if m:
         r.gpu_temp_c = float(m.group(1))
 
-    m = _VDD_GPU_RE.search(line)
-    if m:
-        r.vdd_gpu_soc_mw = int(m.group(1))
+    if layout == "nano":
+        m = _POM_GPU_RE.search(line)
+        if m:
+            r.vdd_gpu_soc_mw = int(m.group(1))
 
-    m = _VDD_CPU_RE.search(line)
-    if m:
-        r.vdd_cpu_cv_mw = int(m.group(1))
+        m = _POM_CPU_RE.search(line)
+        if m:
+            r.vdd_cpu_cv_mw = int(m.group(1))
+    else:
+        m = _VDD_GPU_RE.search(line)
+        if m:
+            r.vdd_gpu_soc_mw = int(m.group(1))
+
+        m = _VDD_CPU_RE.search(line)
+        if m:
+            r.vdd_cpu_cv_mw = int(m.group(1))
 
     return r if matched else None
 
@@ -139,13 +166,20 @@ class TegrastatsDaemon:
         self,
         sample_hz: float = 100.0,
         dispatch_hz: float = 10.0,
-        ema_alpha: float = 0.1,
+        ema_alpha: Optional[float] = None,
         source: str = "auto",
         on_dispatch: Optional[Callable[[TegrastatsReading], None]] = None,
         tegrastats_binary: str = "tegrastats",
+        platform: Union[Platform, str] = Platform.ORIN_AGX,
     ):
-        if not 0.0 < ema_alpha <= 1.0:
-            raise ValueError("ema_alpha must be in (0, 1]")
+        self.profile = get_profile(platform)
+        self.platform_name = self.profile.name
+
+        if ema_alpha is None:
+            ema_alpha = self.profile.default_ema_alpha
+        else:
+            if not 0.0 < ema_alpha <= 1.0:
+                raise ValueError("ema_alpha must be in (0, 1]")
         if dispatch_hz > sample_hz:
             raise ValueError("dispatch_hz must be <= sample_hz")
 
@@ -226,11 +260,12 @@ class TegrastatsDaemon:
         tick = 0
         idx = 0
         next_t = time.monotonic()
+        layout = self.profile.tegrastats_field_layout
         while self._running:
             line = self._read_one_line(idx)
             idx += 1
             if line:
-                reading = parse_tegrastats_line(line)
+                reading = parse_tegrastats_line(line, layout=layout)
                 if reading is not None:
                     with self._lock:
                         if self._latest is None:
