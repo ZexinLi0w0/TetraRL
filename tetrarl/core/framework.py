@@ -33,6 +33,7 @@ self.history and exposed for offline analysis.
 """
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -91,6 +92,7 @@ class TetraRLFramework:
         telemetry_adapter: Callable[[Any], HardwareTelemetry],
         dvfs_controller: Any = None,
         concurrent_decision: Optional[Any] = None,
+        profiler: Optional[Any] = None,
     ):
         self.preference_plane = preference_plane
         self.rl_arbiter = rl_arbiter
@@ -100,11 +102,25 @@ class TetraRLFramework:
         self.telemetry_adapter = telemetry_adapter
         self.dvfs_controller = dvfs_controller
         self.concurrent_decision = concurrent_decision
+        self.profiler = profiler
         self.history: list[dict] = []
 
+    def _maybe_time(self, name: str):
+        """Wrap a component call in profiler.time(name) when a profiler is set.
+
+        Returns a no-op context manager when self.profiler is None so the
+        per-step body stays a single readable block instead of a tower of
+        if/else gates.
+        """
+        if self.profiler is None:
+            return contextlib.nullcontext()
+        return self.profiler.time(name)
+
     def step(self, state) -> dict:
-        omega = self.preference_plane.get()
-        hw = self.telemetry_adapter(self.telemetry_source.latest())
+        with self._maybe_time("preference_plane_get"):
+            omega = self.preference_plane.get()
+        with self._maybe_time("tegra_daemon_sample"):
+            hw = self.telemetry_adapter(self.telemetry_source.latest())
 
         dvfs_idx: Optional[int] = None
         concurrent_dvfs_used = False
@@ -118,14 +134,18 @@ class TetraRLFramework:
             self.concurrent_decision.submit(hw)
             concurrent_dvfs_used = True
 
-        proposed = self.rl_arbiter.act(state, omega)
-        override_fired, fallback = self.override_layer.step(hw)
+        with self._maybe_time("rl_arbiter_act"):
+            proposed = self.rl_arbiter.act(state, omega)
+        with self._maybe_time("override_layer_step"):
+            override_fired, fallback = self.override_layer.step(hw)
         action = fallback if override_fired else proposed
 
         if self.concurrent_decision is None and self.dvfs_controller is not None:
             n_levels = len(self.dvfs_controller.available_frequencies()["gpu"])
-            dvfs_idx = self.resource_manager.decide_dvfs(hw, n_levels=n_levels)
-            self.dvfs_controller.set_freq(gpu_idx=dvfs_idx)
+            with self._maybe_time("resource_manager_decide"):
+                dvfs_idx = self.resource_manager.decide_dvfs(hw, n_levels=n_levels)
+            with self._maybe_time("dvfs_controller_set"):
+                self.dvfs_controller.set_freq(gpu_idx=dvfs_idx)
 
         record: dict = {
             "action": action,
@@ -140,6 +160,8 @@ class TetraRLFramework:
             "concurrent_dvfs_used": concurrent_dvfs_used,
         }
         self.history.append(record)
+        if self.profiler is not None:
+            self.profiler.step_marker()
         return record
 
     def observe_reward(self, reward: float) -> None:

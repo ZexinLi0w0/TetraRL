@@ -14,6 +14,7 @@ dependencies = [
     "gymnasium>=1.0",
     "numpy",
     "scipy",
+    "psutil",
 ]
 
 [project.optional-dependencies]
