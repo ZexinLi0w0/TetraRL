@@ -40,6 +40,15 @@ runs/*
 !runs/w8_ablation_orin/**
 !runs/w8_ablation_orin_real/
 !runs/w8_ablation_orin_real/**
+!runs/w9_ablation_orin_real/
+!runs/w9_ablation_orin_real/**
+!runs/w9_multienv_orin/
+!runs/w9_multienv_orin/**
+!runs/w9_ffmpeg_orin_per_omega/
+!runs/w9_ffmpeg_orin_per_omega/**
+!runs/w9_combined_cdf_per_omega.png
+!runs/w9_combined_cdf_per_omega.svg
+!runs/w9_combined_cdf_per_omega.png.summary.md
 !runs/w7_combined_cdf.png
 !runs/w7_combined_cdf.svg
 !runs/w7_pareto_4d_mac/
