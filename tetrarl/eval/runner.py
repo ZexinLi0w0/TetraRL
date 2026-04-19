@@ -320,7 +320,7 @@ def _make_rl_arbiter(agent_type: str, ablation: str, n_actions: int, seed: int):
     if agent_type == "duojoule":
         from tetrarl.morl.baselines.duojoule import DuoJouleArbiter
         return DuoJouleArbiter(n_actions=n_actions, seed=seed)
-    if agent_type == "max_a":
+    if agent_type in ("max_a", "max_action"):
         from tetrarl.morl.baselines.max_action import MaxActionArbiter
         return MaxActionArbiter(n_actions=n_actions, seed=seed)
     if agent_type == "max_p":
@@ -340,8 +340,13 @@ def _make_override_layer(ablation: str, fallback_action: int = 0):
         thresholds=OverrideThresholds(
             max_latency_ms=2.0,       # tight: fires when env+framework step is slow
             min_energy_j=0.5,
-            max_memory_util=0.13,     # synthetic memory ramps 0.1 + 0.001*step;
-                                      # fires from step 31 onward
+            max_memory_util=0.13,     # W10: synthetic memory now reacts to the
+                                      # last executed action (post-override):
+                                      # mem = 0.08 + 0.005*step + 0.04*action_norm.
+                                      # A high-action arbiter (action_norm=1)
+                                      # crosses 0.13 at step 3; the override
+                                      # clamps the action to fallback=0 so
+                                      # memory stays on the low ramp (action_norm=0).
         ),
         fallback_action=fallback_action,
         cooldown_steps=0,
@@ -510,15 +515,43 @@ class EvalRunner:
         n_steps = 0
         energy_remaining = 1000.0
 
+        # W10 fix: synthetic memory_util reacts to the LAST executed action
+        # (post-override). Init to safe fallback so the first step of the
+        # first episode behaves identically to the legacy formula.
+        last_action: int = 0
+
         t0 = time.perf_counter()
         with open(out_path, "w", encoding="utf-8") as out_file:
             try:
                 for ep in range(int(cfg.n_episodes)):
                     obs, _info = env.reset(seed=int(cfg.seed) + ep)
                     episode_step = 0
+                    # New episode -> reset to safe fallback so memory pressure
+                    # at step 0 is not contaminated by the previous episode's
+                    # final action.
+                    last_action = 0
                     done = False
                     while not done:
-                        memory_util = 0.1 + 0.001 * episode_step
+                        # Memory pressure built from step t-1's executed
+                        # action (so the override layer at step t can react).
+                        # Coefficient 0.005 (not 0.0005) is needed for the
+                        # synthetic ramp to cross max_memory_util=0.13 within
+                        # the short CartPole-v1 episode lengths exercised by
+                        # the W10 override-telemetry tests.
+                        action_norm = float(last_action) / float(max(1, n_actions - 1))
+                        memory_util = 0.08 + 0.005 * episode_step + 0.04 * action_norm
+
+                        # Push the action-aware memory_util into telemetry
+                        # BEFORE framework.step so the override layer at step
+                        # t actually reads the pressure built from step t-1's
+                        # executed action. (Latency / energy_remaining are
+                        # latched post-step below; the override only triggers
+                        # on memory in the W10 fix path.)
+                        telemetry.update(
+                            latency_ms=latencies[-1] if latencies else 0.0,
+                            energy_remaining_j=energy_remaining,
+                            memory_util=memory_util,
+                        )
 
                         t_fw0 = time.perf_counter()
                         record = framework.step(obs)
@@ -566,6 +599,9 @@ class EvalRunner:
                         energies.append(float(energy_j))
                         memory_utils.append(float(memory_util))
                         rewards.append(float(reward))
+                        # Latch the executed (post-override) action so step
+                        # t+1's memory pressure responds to it.
+                        last_action = int(action)
                         episode_step += 1
                         n_steps += 1
                         done = bool(terminated or truncated)
@@ -662,6 +698,10 @@ class EvalRunner:
         # JSONL lines for them once they're done. We continue to step them in
         # the vector-env (cheap) until all are done.
         per_env_done = [False] * n_envs
+        # W10 fix: track per-env last executed (post-override) action so the
+        # synthetic memory_util pressure at step t reacts to step t-1's
+        # action. Init to safe fallback (matches single-env contract).
+        per_env_last_action: list[int] = [0] * n_envs
 
         t0 = time.perf_counter()
         obs, _info = vec_env.reset(seed=int(cfg.seed))
@@ -674,7 +714,12 @@ class EvalRunner:
 
                     # Per-env framework.step (one action per env per rollout step).
                     for i in range(n_envs):
-                        memory_util_i = 0.1 + 0.001 * per_env_step[i]
+                        action_norm_i = float(per_env_last_action[i]) / float(
+                            max(1, n_actions - 1)
+                        )
+                        memory_util_i = (
+                            0.08 + 0.005 * per_env_step[i] + 0.04 * action_norm_i
+                        )
                         # Update telemetry to mirror the single-env contract
                         # (the framework.step reads telemetry latched from
                         # the previous env-i step).
@@ -710,11 +755,20 @@ class EvalRunner:
                             done_i = bool(vec_term[i] or vec_trunc[i])
                             if done_i:
                                 per_env_step[i] = 0
+                                per_env_last_action[i] = 0
                             else:
                                 per_env_step[i] += 1
                             continue
 
-                        memory_util_i = 0.1 + 0.001 * per_env_step[i]
+                        # Recompute the same memory_util_i used for telemetry
+                        # above so the JSONL record matches what the override
+                        # layer actually saw.
+                        action_norm_i = float(per_env_last_action[i]) / float(
+                            max(1, n_actions - 1)
+                        )
+                        memory_util_i = (
+                            0.08 + 0.005 * per_env_step[i] + 0.04 * action_norm_i
+                        )
                         action_i = int(actions[i])
                         reward_i = float(vec_rewards[i])
                         latency_ms_i = env_dt_ms_per + fw_dts_ms[i]
@@ -749,10 +803,16 @@ class EvalRunner:
                         if done_i:
                             per_env_episode[i] += 1
                             per_env_step[i] = 0
+                            # New episode -> reset latched action so the next
+                            # episode's step 0 starts from safe fallback.
+                            per_env_last_action[i] = 0
                             if per_env_episode[i] >= n_episodes_per_env:
                                 per_env_done[i] = True
                         else:
                             per_env_step[i] += 1
+                            # Latch executed (post-override) action so step
+                            # t+1's pressure responds to it.
+                            per_env_last_action[i] = int(action_i)
             finally:
                 vec_env.close()
         wall_time_s = time.perf_counter() - t0
