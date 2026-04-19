@@ -1,0 +1,109 @@
+# Week 8 full ablation sweep (Orin AGX)
+# 5 ablation arms × 3 seeds (0, 1, 2) × CartPole-v1 × 200 episodes
+# Total: 15 entries. Template — runs on Orin via subagent.
+configs:
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: none
+    platform: orin_agx
+    n_episodes: 200
+    seed: 0
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: none
+    platform: orin_agx
+    n_episodes: 200
+    seed: 1
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: none
+    platform: orin_agx
+    n_episodes: 200
+    seed: 2
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: preference_plane
+    platform: orin_agx
+    n_episodes: 200
+    seed: 0
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: preference_plane
+    platform: orin_agx
+    n_episodes: 200
+    seed: 1
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: preference_plane
+    platform: orin_agx
+    n_episodes: 200
+    seed: 2
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: resource_manager
+    platform: orin_agx
+    n_episodes: 200
+    seed: 0
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: resource_manager
+    platform: orin_agx
+    n_episodes: 200
+    seed: 1
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: resource_manager
+    platform: orin_agx
+    n_episodes: 200
+    seed: 2
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: rl_arbiter
+    platform: orin_agx
+    n_episodes: 200
+    seed: 0
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: rl_arbiter
+    platform: orin_agx
+    n_episodes: 200
+    seed: 1
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: rl_arbiter
+    platform: orin_agx
+    n_episodes: 200
+    seed: 2
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: override_layer
+    platform: orin_agx
+    n_episodes: 200
+    seed: 0
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: override_layer
+    platform: orin_agx
+    n_episodes: 200
+    seed: 1
+    out_dir: runs/w8_ablation_full
+  - env_name: CartPole-v1
+    agent_type: random
+    ablation: override_layer
+    platform: orin_agx
+    n_episodes: 200
+    seed: 2
+    out_dir: runs/w8_ablation_full

@@ -1,0 +1,39 @@
+# Week 8 ablation smoke sweep
+# 5 configs × 1 seed × CartPole-v1 × 50 episodes
+# Mac wall-time budget: < 60s
+configs:
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: none
+    platform: mac_stub
+    n_episodes: 50
+    seed: 0
+    out_dir: runs/w8_ablation_smoke
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: preference_plane
+    platform: mac_stub
+    n_episodes: 50
+    seed: 0
+    out_dir: runs/w8_ablation_smoke
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: resource_manager
+    platform: mac_stub
+    n_episodes: 50
+    seed: 0
+    out_dir: runs/w8_ablation_smoke
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: rl_arbiter
+    platform: mac_stub
+    n_episodes: 50
+    seed: 0
+    out_dir: runs/w8_ablation_smoke
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: override_layer
+    platform: mac_stub
+    n_episodes: 50
+    seed: 0
+    out_dir: runs/w8_ablation_smoke
