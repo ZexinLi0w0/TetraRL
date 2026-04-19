@@ -7,14 +7,23 @@ comparison between C-MORL (cloud, multi-process) and TetraRL native
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import gymnasium as gym
 import numpy as np
 import torch
+import torch.nn as nn
 
+from tetrarl.morl.native.gnn_extractor import GCNFeatureExtractor
+from tetrarl.morl.native.masking import ActionMask, NoOpMask
+from tetrarl.morl.native.override import (
+    HardwareTelemetry,
+    OverrideLayer,
+    OverrideThresholds,
+)
 from tetrarl.morl.native.preference_ppo import (
     PreferenceNetwork,
     PreferencePPOConfig,
@@ -42,6 +51,9 @@ class NativeAgentConfig:
     eval_episodes: int = 3
     n_eval_interior: int = 10
     device: str = "cpu"
+    use_masking: bool = False
+    use_override: bool = False
+    use_gnn: bool = False
 
 
 class TetraRLNativeAgent:
@@ -77,6 +89,14 @@ class TetraRLNativeAgent:
         eval_interval: int = 10,
         eval_episodes: int = 3,
         n_eval_interior: int = 10,
+        use_masking: bool = False,
+        use_override: bool = False,
+        use_gnn: bool = False,
+        action_mask: ActionMask | None = None,
+        override_thresholds: OverrideThresholds | None = None,
+        override_fallback: Any = 0,
+        telemetry_fn: Callable[[], HardwareTelemetry] | None = None,
+        gnn_extractor: nn.Module | None = None,
         **kwargs: Any,
     ) -> None:
         if ref_point is None:
@@ -96,11 +116,65 @@ class TetraRLNativeAgent:
             eval_episodes=eval_episodes,
             n_eval_interior=n_eval_interior,
             device=device,
+            use_masking=use_masking,
+            use_override=use_override,
+            use_gnn=use_gnn,
         )
         self._network: PreferenceNetwork | None = None
         self._pareto_front: np.ndarray | None = None
         self._results: dict[str, Any] | None = None
         self._env_fn = self._make_env_fn()
+
+        # --- Optional injection points for masking / override / GNN. ---
+        if use_masking:
+            self._action_mask: ActionMask | None = (
+                action_mask if action_mask is not None else NoOpMask()
+            )
+        else:
+            self._action_mask = action_mask  # may be None
+
+        if use_override:
+            if override_thresholds is None:
+                warnings.warn(
+                    "use_override=True but no OverrideThresholds supplied; "
+                    "defaulting to OverrideThresholds() which never fires.",
+                    stacklevel=2,
+                )
+                override_thresholds = OverrideThresholds()
+            self._override: OverrideLayer | None = OverrideLayer(
+                thresholds=override_thresholds,
+                fallback_action=override_fallback,
+            )
+        else:
+            self._override = None
+        self._telemetry_fn = telemetry_fn
+
+        if use_gnn:
+            if gnn_extractor is None:
+                obs_dim, _, _ = self._infer_env_spec()
+                gnn_extractor = GCNFeatureExtractor(
+                    in_dim=obs_dim,
+                    hidden_dim=hidden_dim,
+                    out_dim=hidden_dim,
+                )
+            self._gnn_extractor: nn.Module | None = gnn_extractor
+        else:
+            self._gnn_extractor = gnn_extractor  # may be None
+
+    def _infer_env_spec(self) -> tuple[int, int, bool]:
+        """Return (obs_dim, act_dim, continuous) by briefly opening the env."""
+        env = self._env_fn()
+        try:
+            obs_dim = int(np.prod(env.observation_space.shape))
+            continuous = isinstance(env.action_space, gym.spaces.Box)
+            act_dim = (
+                env.action_space.shape[0]
+                if continuous
+                else env.action_space.n
+            )
+        finally:
+            env.close()
+        return obs_dim, act_dim, continuous
 
     def _make_env_fn(self) -> Any:
         env_name = self.config.env_name
@@ -134,11 +208,21 @@ class TetraRLNativeAgent:
             if hasattr(ppo_config, k):
                 setattr(ppo_config, k, v)
 
+        train_kwargs: dict[str, Any] = {}
+        if self.config.use_masking:
+            train_kwargs["mask"] = self._action_mask
+        if self.config.use_override:
+            train_kwargs["override"] = self._override
+            train_kwargs["telemetry_fn"] = self._telemetry_fn
+        if self.config.use_gnn:
+            train_kwargs["gnn_extractor"] = self._gnn_extractor
+
         results = train_preference_ppo(
             ppo_config,
             self._env_fn,
             device=self.config.device,
             verbose=verbose,
+            **train_kwargs,
         )
 
         self._network = results["network"]
@@ -214,6 +298,9 @@ class TetraRLNativeAgent:
             self.config.obj_num,
             self.config.hidden_dim,
             continuous,
+            gnn_extractor=self._gnn_extractor
+            if self.config.use_gnn
+            else None,
         ).to(self.config.device)
         self._network.load_state_dict(
             torch.load(
