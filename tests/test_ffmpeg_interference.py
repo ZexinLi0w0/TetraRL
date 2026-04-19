@@ -176,3 +176,62 @@ def test_context_manager_spawns_and_reaps():
     # On exit, the subprocess must be reaped (terminated and waited on).
     # poll() returning a non-None code means the process finished.
     assert proc.poll() is not None
+
+
+# ----------------------------- Cycle 3: summarize -------------------------
+
+
+def _seeded_recorder(values_ms: list[float]):
+    from tetrarl.eval.ffmpeg_interference import LatencyRecorder
+
+    rec = LatencyRecorder()
+    rec._samples_ms = list(values_ms)
+    return rec
+
+
+def test_summarize_columns_present():
+    """Markdown header lists all required columns and one row per condition."""
+    from tetrarl.eval.ffmpeg_interference import summarize
+
+    results = {
+        "none": _seeded_recorder([1.0, 2.0, 3.0, 4.0]),
+        "720p": _seeded_recorder([2.0, 4.0, 6.0, 8.0]),
+    }
+    md = summarize(results)
+    # Header columns
+    for col in ("condition", "n", "p50_ms", "p90_ms", "p99_ms", "p99.9_ms", "slowdown_p99"):
+        assert col in md, f"missing column header {col!r}"
+    # One row per condition (look for the leading pipe + condition name)
+    assert "| none" in md
+    assert "| 720p" in md
+
+
+def test_summarize_slowdown_relative_to_baseline():
+    """slowdown_p99 = condition_p99 / baseline_p99 (baseline = 'none')."""
+    from tetrarl.eval.ffmpeg_interference import summarize
+
+    # Baseline samples: p99 of [1..100] is 99.01 (type-7 interpolation).
+    baseline_vals = [float(i) for i in range(1, 101)]
+    # Condition samples: 2x baseline, so p99 = 198.02.
+    condition_vals = [2.0 * v for v in baseline_vals]
+    results = {
+        "none": _seeded_recorder(baseline_vals),
+        "720p": _seeded_recorder(condition_vals),
+    }
+    md = summarize(results)
+    # Baseline row should show 1.00x slowdown (numerically 1.0).
+    none_row = next(line for line in md.splitlines() if line.startswith("| none"))
+    assert "1.00x" in none_row
+    # 720p row should show 2.00x slowdown.
+    cond_row = next(line for line in md.splitlines() if line.startswith("| 720p"))
+    assert "2.00x" in cond_row
+
+
+def test_summarize_no_baseline_marks_slowdown_na():
+    """If the 'none' baseline is absent, slowdown_p99 column should read N/A."""
+    from tetrarl.eval.ffmpeg_interference import summarize
+
+    results = {"720p": _seeded_recorder([1.0, 2.0, 3.0])}
+    md = summarize(results)
+    cond_row = next(line for line in md.splitlines() if line.startswith("| 720p"))
+    assert "N/A" in cond_row

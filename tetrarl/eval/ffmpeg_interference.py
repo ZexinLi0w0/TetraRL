@@ -283,3 +283,48 @@ class FFmpegInterference:
                         pass
         finally:
             self._process = None
+
+
+def summarize(results: dict[str, "LatencyRecorder"]) -> str:
+    """Return a Markdown table comparing per-condition tail latencies.
+
+    Columns:
+
+      condition | n | p50_ms | p90_ms | p99_ms | p99.9_ms | slowdown_p99
+
+    where ``slowdown_p99 = condition_p99 / baseline_p99``. The baseline is
+    the recorder keyed by ``'none'`` if present; otherwise the slowdown
+    column reads ``N/A``.
+    """
+    header = (
+        "| condition | n | p50_ms | p90_ms | p99_ms | p99.9_ms | slowdown_p99 |"
+    )
+    sep = (
+        "|-----------|---|--------|--------|--------|----------|--------------|"
+    )
+
+    baseline_p99: Optional[float] = None
+    baseline_rec = results.get("none")
+    if baseline_rec is not None and baseline_rec.samples_ms:
+        baseline_p99 = baseline_rec.percentiles([99.0])[99.0]
+
+    rows: list[str] = []
+    for cond, rec in results.items():
+        n = len(rec.samples_ms)
+        if n == 0:
+            rows.append(
+                f"| {cond} | 0 | N/A | N/A | N/A | N/A | N/A |"
+            )
+            continue
+        pcts = rec.percentiles([50.0, 90.0, 99.0, 99.9])
+        if baseline_p99 is not None and baseline_p99 > 0:
+            slowdown = pcts[99.0] / baseline_p99
+            slow_str = f"{slowdown:.2f}x"
+        else:
+            slow_str = "N/A"
+        rows.append(
+            f"| {cond} | {n} | {pcts[50.0]:.3f} | {pcts[90.0]:.3f} | "
+            f"{pcts[99.0]:.3f} | {pcts[99.9]:.3f} | {slow_str} |"
+        )
+
+    return "\n".join([header, sep, *rows]) + "\n"
