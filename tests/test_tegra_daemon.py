@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from tetrarl.sys.platforms import Platform, get_profile
 from tetrarl.sys.tegra_daemon import (
     TegrastatsDaemon,
     TegrastatsReading,
@@ -14,6 +15,7 @@ from tetrarl.sys.tegra_daemon import (
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "tegra_sample.txt"
+NANO_FIXTURE = Path(__file__).parent / "fixtures" / "tegrastats_nano_sample.txt"
 
 
 def test_parse_basic_fields():
@@ -148,3 +150,63 @@ def test_invalid_alpha_raises():
 def test_invalid_dispatch_rate_raises():
     with pytest.raises(ValueError):
         TegrastatsDaemon(sample_hz=10.0, dispatch_hz=100.0)
+
+
+def test_nano_fixture_parses_with_nano_layout():
+    lines = NANO_FIXTURE.read_text().strip().splitlines()
+    assert len(lines) == 30
+    parsed = [parse_tegrastats_line(line, layout="nano") for line in lines]
+    successes = [p for p in parsed if p is not None]
+    assert len(successes) >= 25
+    assert any(p.vdd_gpu_soc_mw > 0 for p in successes)
+
+
+def test_nano_fixture_orin_layout_misses_power():
+    lines = NANO_FIXTURE.read_text().strip().splitlines()
+    parsed = [parse_tegrastats_line(line) for line in lines]  # default "orin"
+    successes = [p for p in parsed if p is not None]
+    assert len(successes) >= 25
+    # POM_5V_* won't match VDD_GPU_SOC / VDD_CPU_CV regexes -> all zero.
+    assert all(p.vdd_gpu_soc_mw == 0 for p in successes)
+    assert all(p.vdd_cpu_cv_mw == 0 for p in successes)
+
+
+def test_daemon_nano_platform_uses_nano_alpha_default():
+    nano_profile = get_profile(Platform.NANO)
+    daemon = TegrastatsDaemon(platform=Platform.NANO)
+    assert daemon.ema_alpha == nano_profile.default_ema_alpha
+
+
+def test_daemon_orin_platform_default_alpha_unchanged():
+    assert TegrastatsDaemon().ema_alpha == 0.1
+    assert TegrastatsDaemon(platform=Platform.ORIN_AGX).ema_alpha == 0.1
+
+
+def test_daemon_nano_fixture_end_to_end_dispatches_with_power():
+    received: list[TegrastatsReading] = []
+    daemon = TegrastatsDaemon(
+        platform=Platform.NANO,
+        source=f"file:{NANO_FIXTURE}",
+        sample_hz=200.0,
+        dispatch_hz=200.0,
+        ema_alpha=1.0,
+        on_dispatch=received.append,
+    )
+    daemon.start()
+    time.sleep(0.3)
+    daemon.stop()
+
+    assert len(received) >= 1
+    assert any(r.vdd_gpu_soc_mw > 0 or r.vdd_cpu_cv_mw > 0 for r in received)
+
+
+def test_explicit_ema_alpha_overrides_profile_default():
+    daemon = TegrastatsDaemon(platform=Platform.NANO, ema_alpha=0.05)
+    assert daemon.ema_alpha == 0.05
+
+
+def test_daemon_platform_name_attribute():
+    nano_profile = get_profile(Platform.NANO)
+    daemon = TegrastatsDaemon(platform=Platform.NANO)
+    assert daemon.platform_name == nano_profile.name
+    assert daemon.platform_name == "Jetson Nano (4 GB)"
