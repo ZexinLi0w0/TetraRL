@@ -1,8 +1,23 @@
 # TetraRL / R⁴ TC Paper — 12-Week Action Plan
 
-**Document version**: 2026-04-17
+**Document version**: 2026-04-18 (revised; original 2026-04-17)
 **Calendar span**: Week 1 (2026-04-20) through Week 12 (ending 2026-07-12)
 **Target venue**: IEEE Transactions on Computers (TC)
+
+---
+
+## External Dependencies & Known Blockers
+
+| Dependency | Status | Affected Weeks | Mitigation |
+|---|---|---|---|
+| **DonkeyCar simulator** (gym-donkeycar + Unity DonkeySim) | ⚠️ **Blocked** — requires external x86 PC with discrete GPU; not available now | W7, W9, W10 (originally) | Substitute with **DAG-scheduler-MO env** (W4-bonus) + **PyBullet-HalfCheetah** as the closed-loop targets. DonkeyCar runs added retroactively whenever the external PC is provisioned. Not on critical path. |
+| **Xavier NX hardware** | ❌ **Removed** from plan (hardware unavailable) | W7, W9, W10 (originally) | Multi-platform scope reduced to **Orin AGX + Jetson Nano** only. |
+| **Jetson Nano** | ✅ Available | W7 (Track B), W9, W10 | Standard porting workflow; sysfs paths differ from Orin (allow ~1 day buffer). |
+| **Orin AGX** | ✅ Available | W5–12 | Primary target platform. |
+
+**Project conventions** (added 2026-04-18):
+- All production code work goes through **Claude Code CLI with the `superpowers` plugin** enabled. Do not write production code from the OpenClaw main session directly.
+- Subagent handoffs use `~/.openclaw/workspace/AGENTS_HANDOFF/active/<task-id>/spec.md`.
 
 ---
 
@@ -156,10 +171,10 @@
 **Concrete tasks**:
 
 *Track A — Orin AGX closed-loop (primary):*
-1. Run C-MORL / TetraRL-Native (off-policy variant if available, else PPO native) on DonkeyCar simulator with DVFS + tegrastats on Orin AGX for 500 episodes. Sweep 5 representative preference vectors ω (one-hot corners + center).
+1. **⚠️ BLOCKED ON EXTERNAL PC** — ~~Run C-MORL / TetraRL-Native on DonkeyCar simulator with DVFS + tegrastats on Orin AGX for 500 episodes, sweeping 5 representative preference vectors ω (one-hot corners + center).~~ DonkeyCar simulator (gym-donkeycar + Unity DonkeySim binary) cannot run on the available Orin AGX directly; it requires a separate x86 PC with a discrete GPU to host the simulator and stream observations to Orin over the network. **Fallback for Week 7**: substitute with the existing **synthetic DAG scheduling MO env** (Week 4-bonus, `tetrarl/envs/dag_scheduler.py`) and **PyBullet-HalfCheetah** (Track A.2) as the primary closed-loop targets. DonkeyCar runs are deferred until the external PC is provisioned (tracked separately, not on critical path).
 2. Run PPO-Lagrangian (on-policy) on PyBullet-HalfCheetah with the unified knob mapper (`n_steps`, `n_epochs`, `mini_batch_size` as knobs per §9.2) on Orin AGX. Validate that the Lagrangian dual variables converge and constraints are respected (with override layer as safety net).
 3. Implement the "thinking-while-moving" concurrent decision trick from DVFO (Zhang TMC 2023) in `tetrarl/sys/concurrent.py` — overlap DVFS decision computation with RL forward pass to mask decision-loop overhead.
-4. Generate Pareto front visualization: 2-D projections of the 4-D Pareto front (T vs. A, E vs. A, M vs. A) for the DonkeyCar-SAC runs on Orin. Compute HV indicator.
+4. Generate Pareto front visualization: 2-D projections of the 4-D Pareto front (T vs. A, E vs. A, M vs. A) on Orin. **Substitute env**: DAG scheduler MO env + PyBullet-HalfCheetah (DonkeyCar deferred). Compute HV indicator.
 5. Run the co-runner FFmpeg interference test (R³ protocol, Fig. 15) on Orin: 720p / 1080p / 2K background video decoding while training. Log tail-latency shifts.
 
 *Track B — Jetson Nano porting (parallel, pulled from Week 9):*
@@ -169,14 +184,14 @@
 
 **Deliverables**:
 - `tetrarl/sys/concurrent.py` — decision-loop overhead masking
-- 4-D Pareto front scatter plots (3 × 2-D projections) for DonkeyCar-SAC on Orin — paper-figure-ready
+- 4-D Pareto front scatter plots (3 × 2-D projections) for **DAG-scheduler-MO + PyBullet-HalfCheetah** on Orin — paper-figure-ready (DonkeyCar deferred until external PC available)
 - FFmpeg co-runner interference table (tail-latency 99th percentile at 720p/1080p/2K) — paper-figure-ready
 - Jetson Nano DVFS transition latency table — paper Table candidate
 - 2-platform tail-latency CDF figure (Orin / Nano) — paper Figure candidate
 - Nano-CartPole training log proving override-driven OOM prevention
 
 **Validation criteria**:
-- DonkeyCar achieves ≥70% of MAX-A reward while maintaining zero deadline misses under the center preference ω = [0.25, 0.25, 0.25, 0.25] on Orin.
+- Substitute env (DAG-scheduler-MO or PyBullet-HalfCheetah) achieves ≥70% of MAX-A reward while maintaining zero deadline misses under the center preference ω = [0.25, 0.25, 0.25, 0.25] on Orin. (DonkeyCar criterion deferred.)
 - PPO-Lagrangian constraint violation rate is < 20% of episodes (with override layer active) on Orin.
 - FFmpeg co-runner at 1080p does not increase 99th-percentile latency by more than 2× relative to the no-interference case on Orin.
 - Jetson Nano completes CartPole training without OOM (override layer triggers ≥ 1 time during the run, confirming its activation on constrained hardware).
@@ -185,6 +200,7 @@
 - If PPO uses multi-processing via `n_envs`, lowering the CPU frequency will cause env process progress to desynchronize, leading to straggler tail latencies (§9.7 pitfall 3). Use `n_envs = 1` initially; multi-env scaling is deferred to Week 9.
 - Jetson Nano sysfs DVFS interfaces differ from Orin AGX (different cpufreq/devfreq layout). Allow ~1 day of buffer for Nano-specific path discovery; gate sysfs writes behind `--allow-real-dvfs` flag during porting.
 - Code work on this and later weeks must go through Claude Code CLI with the **superpowers** plugin enabled (per project convention 2026-04-18). Do not write production code from the OpenClaw main session directly.
+- **External-PC dependency for DonkeyCar (deferred)**: DonkeyCar runs require a separate x86 PC with discrete GPU to host the Unity-based simulator. This blocker is tracked outside the critical path; do not block Week 7 progress on DonkeyCar availability. When the external PC is provisioned, DonkeyCar runs can be retroactively added to Week 9/10/11 supplementary results.
 
 ---
 
@@ -220,20 +236,20 @@
 > **Plan revision (2026-04-18)**: Original Week 9 (Xavier NX + Nano porting) is replaced. Xavier NX is dropped (hardware unavailable). Nano porting moved to Week 7 Track B. This week now consolidates Nano deep-validation, the DVFS-DRL-Multitask baseline, and the multi-env scaling deferred from Week 7.
 
 **Concrete tasks**:
-1. Run the full DonkeyCar pipeline on Jetson Nano (reduced episode count if memory bound, e.g. 200 episodes, 3 preference vectors instead of 5). Confirm Pareto front shape relative to Orin; document any compute-bottleneck-induced shape changes.
-2. Re-fit the RBF interpolator on Nano if HV drops below 50% of Orin's on the same DonkeyCar task (§3 Idea 3 failure mode — bottleneck shifts between CPU/GPU-bound regimes are non-linear across architectures).
+1. **⚠️ BLOCKED ON EXTERNAL PC** — ~~Run the full DonkeyCar pipeline on Jetson Nano (200 episodes, 3 preference vectors).~~ DonkeyCar requires external x86 PC + discrete GPU (see Week 7 note). **Fallback**: run the substitute envs (DAG-scheduler-MO + CartPole) on Nano in their place; DonkeyCar runs are deferred to whenever the external PC is provisioned.
+2. Re-fit the RBF interpolator on Nano if HV drops below 50% of Orin's on the **substitute env** (§3 Idea 3 failure mode — bottleneck shifts between CPU/GPU-bound regimes are non-linear across architectures). Re-fit on DonkeyCar later if the external PC becomes available.
 3. Incorporate the DVFS-DRL-Multitask (2024) soft-deadline reward shaping (Algorithm 3) as an additional baseline. Run on **both Orin and Nano**.
 4. Re-enable PPO multi-env (`n_envs > 1`) on Orin, the multi-env scaling deferred from Week 7. Document the `n_envs` × DVFS-frequency interaction (per §9.7 pitfall 3 straggler tail latencies).
 5. Cross-platform tail-latency CDF expansion: extend the Week 7 Orin/Nano 2-panel figure with per-preference-vector breakdowns.
 
 **Deliverables**:
-- Nano DonkeyCar Pareto-front data (paper-figure-ready)
+- Nano substitute-env Pareto-front data (paper-figure-ready). DonkeyCar Pareto data deferred.
 - DVFS-DRL-Multitask baseline results on Orin and Nano
 - Multi-env scaling results table (`n_envs` ∈ {1, 2, 4} × {fixed-freq, DVFS-on})
 - Expanded tail-latency CDF figure with preference-vector breakdowns
 
 **Validation criteria**:
-- Nano DonkeyCar completes 200 episodes without OOM (override active).
+- Nano substitute env (DAG-scheduler-MO or CartPole) completes 200 episodes without OOM (override active). DonkeyCar criterion deferred.
 - DVFS-DRL-Multitask baseline runs to completion on both Orin and Nano without crashes.
 - Multi-env scaling does not cause > 3× tail-latency degradation when DVFS is active (otherwise document as a known limitation).
 
@@ -246,7 +262,7 @@
 **Theme**: Full metric collection and Pareto-front analysis (Orin + Nano, no Xavier NX)
 
 **Concrete tasks**:
-1. Run the complete evaluation matrix: {SAC, PPO} × {Orin, Nano} × {5 preference vectors} × {3 seeds}. Collect all metrics: HV, tail-latency 99th, energy per step (J), memory peak (MB), reward. (Nano reduced scope: CartPole + DonkeyCar-reduced as feasible.)
+1. Run the complete evaluation matrix: {SAC, PPO} × {Orin, Nano} × {5 preference vectors} × {3 seeds} on the available envs (PyBullet-HalfCheetah + DAG-scheduler-MO; DonkeyCar deferred until external PC provisioned). Collect all metrics: HV, tail-latency 99th, energy per step (J), memory peak (MB), reward. (Nano reduced scope: CartPole + DAG-scheduler-MO-reduced as feasible.)
 2. Compute and plot Hypervolume (HV) graphs with ablation lines: PD-MORL (ours) vs. Envelope MORL (Yang 2019) vs. PPO-Lagrangian vs. FOCOPS (Zhang 2020) vs. DuoJoule vs. MAX-A vs. MAX-P. Apply PCN (Reymond 2022) as a discrete-action baseline if applicable.
 3. Generate the Reward vs. Wall-clock Time and Reward vs. Cumulative Energy (Joules) plots (per §9.6: not Reward vs. Steps, which is unfair to on-policy algorithms).
 4. Produce the dynamic preference-switching demonstration: a time-series showing smooth transitions as ω changes mid-episode (e.g., simulating "low battery → increase w_E").
@@ -371,7 +387,7 @@ Week 1 ──→ Week 2 ──→ Week 3 ──→ Week 4  (sequential: algorith
 | Week 4 | 1.5 days | PPO-Lagrangian is well-documented in OmniSafe; reserve buffer for integration debugging |
 | Week 5 | 1 day | DVFS profiling is mechanical; risk is in tegrastats daemon stability under long runs |
 | Week 6 | 0 days (tight) | This is the highest-risk week (full integration). If blocked, delay Week 7 experiments and use Week 8 buffer |
-| Week 7 | 0.5 days | DonkeyCar experiments are long-running; parallelizable with PPO runs |
+| Week 7 | 0.5 days | DonkeyCar deferred (external PC dependency); substitute envs (DAG-scheduler-MO + PyBullet-HalfCheetah) used in its place |
 | Week 8 | 1.5 days | Explicitly reserved as integration buffer for Weeks 5–7 spillover |
 | Week 9 | 1 day | Nano deep-validation + DVFS-DRL-Multitask baseline; memory-specific workarounds may be needed |
 | Week 10 | 0.5 days | Evaluation runs are parallelizable across platforms; bottleneck is Nano's slow training |
