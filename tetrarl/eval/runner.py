@@ -487,7 +487,9 @@ class EvalRunner:
 
         out_dir = Path(cfg.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        jsonl_name = f"{cfg.ablation}__{cfg.agent_type}__seed{cfg.seed}.jsonl"
+        jsonl_name = cfg.extra.get("jsonl_name") or (
+            f"{cfg.ablation}__{cfg.agent_type}__seed{cfg.seed}.jsonl"
+        )
         out_path = out_dir / jsonl_name
 
         latencies: list[float] = []
@@ -620,7 +622,7 @@ class EvalRunner:
 
         out_dir = Path(cfg.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        jsonl_name = (
+        jsonl_name = cfg.extra.get("jsonl_name") or (
             f"{cfg.ablation}__{cfg.agent_type}__seed{cfg.seed}__nenvs{n_envs}.jsonl"
         )
         out_path = out_dir / jsonl_name
