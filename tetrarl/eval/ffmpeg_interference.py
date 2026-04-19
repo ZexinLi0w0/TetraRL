@@ -285,6 +285,37 @@ class FFmpegInterference:
             self._process = None
 
 
+def run_workload(
+    framework,
+    env,
+    n_steps: int,
+    recorder: "LatencyRecorder",
+) -> None:
+    """Drive ``framework.step`` + ``env.step`` for ``n_steps`` and record latency.
+
+    Each loop iteration records one sample = wall time between successive
+    ``recorder.mark()`` calls, i.e. the round-trip cost of one framework
+    decision plus one environment step. Episodes are auto-reset.
+    """
+    if n_steps <= 0:
+        raise ValueError(f"n_steps must be > 0, got {n_steps}")
+    obs, _info = env.reset()
+    recorder.start()
+    for _ in range(int(n_steps)):
+        rec = framework.step(obs)
+        action = int(rec["action"])
+        step_out = env.step(action)
+        # Gymnasium returns (obs, reward, terminated, truncated, info).
+        obs = step_out[0]
+        reward = float(step_out[1])
+        terminated = bool(step_out[2])
+        truncated = bool(step_out[3])
+        framework.observe_reward(reward)
+        recorder.mark()
+        if terminated or truncated:
+            obs, _info = env.reset()
+
+
 def summarize(results: dict[str, "LatencyRecorder"]) -> str:
     """Return a Markdown table comparing per-condition tail latencies.
 

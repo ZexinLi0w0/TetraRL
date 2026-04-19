@@ -235,3 +235,25 @@ def test_summarize_no_baseline_marks_slowdown_na():
     md = summarize(results)
     cond_row = next(line for line in md.splitlines() if line.startswith("| 720p"))
     assert "N/A" in cond_row
+
+
+# ----------------------- Cycle 4: run_workload ----------------------------
+
+
+def test_run_workload_records_n_steps():
+    """run_workload records exactly n_steps samples through framework+env."""
+    import gymnasium as gym
+
+    from scripts.week6_e2e_smoke import make_framework
+    from tetrarl.eval.ffmpeg_interference import LatencyRecorder, run_workload
+
+    env = gym.make("CartPole-v1")
+    fw, _telemetry, _override = make_framework(
+        n_actions=int(env.action_space.n), seed=0
+    )
+    rec = LatencyRecorder()
+    run_workload(fw, env, n_steps=20, recorder=rec)
+    env.close()
+    assert len(rec.samples_ms) == 20
+    # Framework history should also have 20 entries (one per step).
+    assert len(fw.history) == 20
