@@ -86,13 +86,14 @@ def test_gnn_extractor_constructible_inside_agent():
     assert agent._gnn_extractor.out_dim == 8
 
 
-def test_gnn_train_raises_until_graph_env():
-    """train(use_gnn=True) must raise NotImplementedError until a graph env exists.
+def test_gnn_train_raises_on_flat_env_consistency_check():
+    """train(use_gnn=True) on a flat-obs env must raise ValueError.
 
-    Current rollout produces flat (obs_dim + pref_dim) observations, while a
-    PreferenceNetwork with gnn_extractor is sized for (gnn_out_dim + pref_dim).
-    The fail-fast guard in train_preference_ppo raises immediately at network
-    creation time, before any rollout is produced.
+    The Stage 2 rollout supports graph envs end-to-end, so the old
+    NotImplementedError guard is gone. In its place, train_preference_ppo
+    now enforces a strict consistency check: a Dict observation space must
+    be paired with a gnn_extractor and vice versa. DST is a flat env, so
+    pairing it with a GNN extractor must fail fast.
     """
     extractor = GCNFeatureExtractor(in_dim=2, hidden_dim=8, out_dim=8)
     kw = dict(_COMMON_KW)
@@ -105,5 +106,5 @@ def test_gnn_train_raises_until_graph_env():
         **kw,
     )
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError):
         agent.train(verbose=False)
