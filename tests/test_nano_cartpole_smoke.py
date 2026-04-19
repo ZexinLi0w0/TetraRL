@@ -10,9 +10,6 @@ These tests must run on Mac in CI without root or any Jetson hardware.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
-import pytest
 
 from scripts.week7_nano_cartpole import run_nano_cartpole
 
