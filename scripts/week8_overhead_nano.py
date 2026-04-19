@@ -28,9 +28,9 @@ Acceptance (printed banner):
         framework_overhead_pct < 5.0  AND
         (--with-lag-feature  =>  lag p99_ms < 0.5)
 
-Mac dev note: ``--no-real-tegrastats`` and ``--no-real-dvfs`` should be
-passed when running off-Nano so the script falls back to
-``PsutilTelemetrySource`` / stub DVFS and never touches sysfs.
+Mac dev note: ``--no-real-tegrastats`` keeps the script Mac-friendly.
+``--allow-real-dvfs`` is OFF by default; pass it on Nano to hit real
+sysfs writes (requires sudo + governor=userspace).
 
 Example::
 
@@ -45,6 +45,7 @@ import json
 import os
 import platform as _pyplatform
 import socket
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -311,9 +312,24 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Don't spawn the real tegrastats binary; use psutil/vm_stat instead.",
     )
     p.add_argument(
-        "--no-real-dvfs",
+        "--allow-real-dvfs",
         action="store_true",
-        help="Force DVFS stub mode (don't write sysfs).",
+        default=False,
+        help=(
+            "Hit the real DVFS sysfs path instead of the stub. "
+            "Requires sudo + governor=userspace precondition on Orin Nano "
+            "(see docs/week8_overhead_design.md Limitations). Default: stub. "
+            "Pair with --restore-governor to restore schedutil after the run."
+        ),
+    )
+    p.add_argument(
+        "--restore-governor",
+        action="store_true",
+        default=False,
+        help=(
+            "After the measurement run, best-effort restore the default "
+            "schedutil governor on cpu0 (no-op if the sysfs write fails)."
+        ),
     )
     p.add_argument(
         "--no-strict",
@@ -359,7 +375,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         n_steps=args.n_steps,
         seed=args.seed,
         platform=args.platform,
-        use_real_dvfs=not args.no_real_dvfs,
+        use_real_dvfs=args.allow_real_dvfs,
         use_real_tegrastats=not args.no_real_tegrastats,
         track_memory=args.track_memory,
         with_lag_feature=args.with_lag_feature,
@@ -408,7 +424,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "effort": args.effort,
         "n_steps": int(args.n_steps),
         "with_lag_feature": bool(args.with_lag_feature),
-        "use_real_dvfs": not args.no_real_dvfs,
+        "use_real_dvfs": args.allow_real_dvfs,
         "use_real_tegrastats": not args.no_real_tegrastats,
         "track_memory": bool(args.track_memory),
         "hostname": socket.gethostname(),
@@ -429,6 +445,31 @@ def main(argv: Optional[list[str]] = None) -> int:
     }
     summary_path = out_dir / "summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+    # ---- Optional best-effort governor restore ----
+    if args.restore_governor:
+        try:
+            cp = subprocess.run(
+                [
+                    "sudo",
+                    "-n",
+                    "sh",
+                    "-c",
+                    "echo schedutil > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if cp.returncode == 0:
+                print("[restore-governor] cpu0 scaling_governor -> schedutil (ok)")
+            else:
+                print(
+                    "[restore-governor] best-effort restore failed "
+                    f"(rc={cp.returncode}); leaving governor as-is."
+                )
+        except Exception as exc:  # pragma: no cover - best-effort cleanup
+            print(f"[restore-governor] skipped: {exc!r}")
 
     # ---- Acceptance banner ----
     overhead_ok = (
