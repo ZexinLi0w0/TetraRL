@@ -21,8 +21,11 @@ from tetrarl.runtime.preference_elicitation import (
 
 
 def test_simplex_normalize_already_simplex():
+    # Note: even when the input is already on the simplex, normalisation
+    # divides by the (computed) sum, which can introduce ULP-level float
+    # noise depending on platform/glibc. Use approx() rather than ==.
     omega = simplex_normalize([0.4, 0.3, 0.2, 0.1])
-    assert omega == (0.4, 0.3, 0.2, 0.1)
+    assert omega == pytest.approx((0.4, 0.3, 0.2, 0.1))
 
 
 def test_simplex_normalize_unnormalised():
