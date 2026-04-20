@@ -1,0 +1,74 @@
+{
+  "platform": "orin_nano",
+  "agent": "preference_ppo",
+  "env": "dag_scheduler_mo",
+  "effort": "max",
+  "n_steps": 5000,
+  "n_tasks": 8,
+  "density": 0.3,
+  "use_real_dvfs": true,
+  "use_real_tegrastats": true,
+  "track_memory": true,
+  "hostname": "ubuntu",
+  "device": "Linux ubuntu 5.10.120-tegra aarch64",
+  "pid": 6980,
+  "mean_bare_step_ms": 0.06603552,
+  "mean_framework_step_ms": 3.0512810688,
+  "framework_overhead_pct": 4520.666375914053,
+  "acceptance_threshold_pct": 30.0,
+  "components": {
+    "preference_plane_get": {
+      "mean_ms": 0.0086313664,
+      "p50_ms": 0.008544,
+      "p99_ms": 0.009696,
+      "mem_mb": 0.002899169921875,
+      "rss_mb": 0.0,
+      "n_samples": 5000
+    },
+    "tegra_daemon_sample": {
+      "mean_ms": 0.0297144768,
+      "p50_ms": 0.029344,
+      "p99_ms": 0.034659520000000076,
+      "mem_mb": 0.002628326416015625,
+      "rss_mb": 0.0,
+      "n_samples": 5000
+    },
+    "rl_arbiter_act": {
+      "mean_ms": 0.05499498880000001,
+      "p50_ms": 0.05456,
+      "p99_ms": 0.06748896000000003,
+      "mem_mb": 0.00074005126953125,
+      "rss_mb": 0.0,
+      "n_samples": 5000
+    },
+    "override_layer_step": {
+      "mean_ms": 0.0101704896,
+      "p50_ms": 0.010048,
+      "p99_ms": 0.011552320000000007,
+      "mem_mb": 0.0011453628540039062,
+      "rss_mb": 0.0,
+      "n_samples": 5000
+    },
+    "resource_manager_decide": {
+      "mean_ms": 0.0124847808,
+      "p50_ms": 0.012352,
+      "p99_ms": 0.013856320000000007,
+      "mem_mb": 0.0005168914794921875,
+      "rss_mb": 0.2578125,
+      "n_samples": 5000
+    },
+    "dvfs_controller_set": {
+      "mean_ms": 1.0490006336,
+      "p50_ms": 1.017296,
+      "p99_ms": 1.35104256,
+      "mem_mb": 0.008424758911132812,
+      "rss_mb": 4.0,
+      "n_samples": 5000
+    }
+  },
+  "deferred_dvfs_reason": null,
+  "artifacts": {
+    "overhead_table_md": "runs/w9_overhead_rebaseline_nano/overhead_table.md",
+    "overhead_breakdown_csv": "runs/w9_overhead_rebaseline_nano/overhead_breakdown.csv"
+  }
+}
