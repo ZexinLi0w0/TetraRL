@@ -105,3 +105,27 @@ def test_dvfs_uses_stub_when_no_real_dvfs(tmp_path):
         platform="nano",
     )
     assert summary["total_steps"] > 0
+
+
+def test_psutil_telemetry_update_accepts_memory_util_kwarg():
+    """week9_nano_dag_sweep calls telemetry.update(..., memory_util=x); the
+    contract must accept that kwarg uniformly across stub/Psutil/Tegra."""
+    from scripts.week7_nano_cartpole import PsutilTelemetrySource
+
+    src = PsutilTelemetrySource(initial_energy_j=100.0)
+    src.update(latency_ms=1.0, energy_remaining_j=99.0, memory_util=0.5)
+
+
+def test_tegra_telemetry_update_accepts_memory_util_kwarg_in_signature():
+    """TegraTelemetrySource cannot be instantiated without real Jetson
+    hardware (TegrastatsDaemon.start raises on Mac), but the bound method
+    signature must accept memory_util so the W9 caller doesn't raise."""
+    import inspect
+
+    from scripts.week7_nano_cartpole import TegraTelemetrySource
+
+    sig = inspect.signature(TegraTelemetrySource.update)
+    assert "memory_util" in sig.parameters, (
+        f"TegraTelemetrySource.update missing memory_util kwarg; "
+        f"got params={list(sig.parameters)}"
+    )
