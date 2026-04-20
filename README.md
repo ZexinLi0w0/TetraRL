@@ -5,15 +5,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0%2B-orange.svg)](https://pytorch.org/)
-[![Status](https://img.shields.io/badge/status-Week%200%20%E2%80%94%20skeleton-lightgrey.svg)](docs/action-plan-weekly.md)
+[![Status](https://img.shields.io/badge/status-Week%2010%20—%20Orin%20eval%20complete-brightgreen.svg)](docs/action-plan-weekly.md)
+[![arXiv](https://img.shields.io/badge/arXiv-TBD-b31b1b.svg)](https://arxiv.org/)
 
 **Built around the R⁴ principle: Real-time × Reward × RAM × Recharge**
-
-<!-- Badges -->
-![CI](https://github.com/ZexinLi0w0/TetraRL/actions/workflows/ci.yml/badge.svg)
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
-![arXiv](https://img.shields.io/badge/arXiv-TBD-b31b1b.svg)
 
 ---
 
