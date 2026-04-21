@@ -23,7 +23,7 @@ from tetrarl.sys.platforms import Platform, get_profile
 
 _RAM_RE = re.compile(r"RAM\s+(\d+)/(\d+)MB")
 _CPU_RE = re.compile(r"CPU\s+\[([^\]]+)\]")
-_GR3D_RE = re.compile(r"GR3D_FREQ\s+(\d+)%@\[?(\d+)\]?")
+_GR3D_RE = re.compile(r"GR3D_FREQ\s+(\d+)%(?:@\[?(\d+)\]?)?")
 _GPU_TEMP_RE = re.compile(r"GPU@([\d.]+)C")
 _VDD_GPU_RE = re.compile(r"VDD_GPU_SOC\s+(\d+)mW")
 _VDD_CPU_RE = re.compile(r"VDD_CPU_CV\s+(\d+)mW")
@@ -90,7 +90,7 @@ def parse_tegrastats_line(
     m = _GR3D_RE.search(line)
     if m:
         r.gr3d_freq_pct = float(m.group(1))
-        r.gpu_freq_mhz = int(m.group(2))
+        r.gpu_freq_mhz = int(m.group(2)) if m.group(2) is not None else 0
         matched = True
 
     m = _EMC_RE.search(line)
