@@ -58,6 +58,8 @@ runs/*
 !runs/w7_pareto_4d_mac/**
 !runs/w10_orin_full/
 !runs/w10_orin_full/**
+!runs/w10_nano_matrix/
+!runs/w10_nano_matrix/**
 # Only whitelist the per-omega winner Markdown report; the JSONL eval
 # logs themselves stay ignored (regenerable from the matrix YAML).
 !runs/w10_orin_full_fixed/

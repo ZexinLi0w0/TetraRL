@@ -1,0 +1,1021 @@
+configs:
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__preference_ppo__CartPole__reward__seed0__o0.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__preference_ppo__CartPole__reward__seed1__o0.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__preference_ppo__CartPole__reward__seed2__o0.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__preference_ppo__CartPole__time__seed0__o1.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__preference_ppo__CartPole__time__seed1__o1.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__preference_ppo__CartPole__time__seed2__o1.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__preference_ppo__CartPole__memory__seed0__o2.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__preference_ppo__CartPole__memory__seed1__o2.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__preference_ppo__CartPole__memory__seed2__o2.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__preference_ppo__CartPole__energy__seed0__o3.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__preference_ppo__CartPole__energy__seed1__o3.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__preference_ppo__CartPole__energy__seed2__o3.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__preference_ppo__CartPole__center__seed0__o4.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__preference_ppo__CartPole__center__seed1__o4.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__preference_ppo__CartPole__center__seed2__o4.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__reward__seed0__o0.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__reward__seed1__o0.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__reward__seed2__o0.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__time__seed0__o1.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__time__seed1__o1.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__time__seed2__o1.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__memory__seed0__o2.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__memory__seed1__o2.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__memory__seed2__o2.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__energy__seed0__o3.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__energy__seed1__o3.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__energy__seed2__o3.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__center__seed0__o4.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__center__seed1__o4.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: preference_ppo
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__preference_ppo__dag_scheduler-mo__center__seed2__o4.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__dvfs_drl_multitask__CartPole__reward__seed0__o0.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__dvfs_drl_multitask__CartPole__reward__seed1__o0.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__dvfs_drl_multitask__CartPole__reward__seed2__o0.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__dvfs_drl_multitask__CartPole__time__seed0__o1.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__dvfs_drl_multitask__CartPole__time__seed1__o1.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__dvfs_drl_multitask__CartPole__time__seed2__o1.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__dvfs_drl_multitask__CartPole__memory__seed0__o2.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__dvfs_drl_multitask__CartPole__memory__seed1__o2.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__dvfs_drl_multitask__CartPole__memory__seed2__o2.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__dvfs_drl_multitask__CartPole__energy__seed0__o3.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__dvfs_drl_multitask__CartPole__energy__seed1__o3.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__dvfs_drl_multitask__CartPole__energy__seed2__o3.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__dvfs_drl_multitask__CartPole__center__seed0__o4.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__dvfs_drl_multitask__CartPole__center__seed1__o4.jsonl
+  n_envs: 1
+- env_name: CartPole-v1
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__dvfs_drl_multitask__CartPole__center__seed2__o4.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__reward__seed0__o0.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__reward__seed1__o0.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    omega_idx: 0
+    omega_name: reward
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__reward__seed2__o0.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__time__seed0__o1.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__time__seed1__o1.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    omega_idx: 1
+    omega_name: time
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__time__seed2__o1.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__memory__seed0__o2.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__memory__seed1__o2.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 1.0
+    - 0.0
+    omega_idx: 2
+    omega_name: memory
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__memory__seed2__o2.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__energy__seed0__o3.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__energy__seed1__o3.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    omega_idx: 3
+    omega_name: energy
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__energy__seed2__o3.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 0
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__center__seed0__o4.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 1
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__center__seed1__o4.jsonl
+  n_envs: 1
+- env_name: dag_scheduler_mo-v0
+  agent_type: dvfs_drl_multitask
+  ablation: none
+  platform: orin_nano
+  n_episodes: 200
+  seed: 2
+  out_dir: runs/w10_nano_matrix
+  extra:
+    omega:
+    - 0.25
+    - 0.25
+    - 0.25
+    - 0.25
+    omega_idx: 4
+    omega_name: center
+    jsonl_name: none__dvfs_drl_multitask__dag_scheduler-mo__center__seed2__o4.jsonl
+  n_envs: 1
