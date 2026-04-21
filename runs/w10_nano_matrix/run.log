@@ -1,0 +1,5 @@
+/experiment/zexin/TetraRL/tetrarl/eval/runner.py:443: RuntimeWarning: _make_telemetry() called with platform='orin_nano' but the real tegrastats daemon is not wired up here; falling back to the Mac stub. Real-Orin runs should use the platform-specific scripts that build a TegrastatsDaemon directly.
+  telemetry_source, telemetry_adapter = _make_telemetry(cfg.platform)
+/experiment/zexin/venvs/tetrarl-nano/lib/python3.10/site-packages/gymnasium/utils/passive_env_checker.py:245: UserWarning: [33mWARN: The reward returned by `step()` must be a float, int, np.integer or np.floating, actual type: <class 'numpy.ndarray'>[0m
+  logger.warn(
+Completed 60 runs
