@@ -60,6 +60,8 @@ runs/*
 !runs/w10_orin_full/**
 !runs/w10_nano_matrix/
 !runs/w10_nano_matrix/**
+!runs/w11_nano_grpo_orin/
+!runs/w11_nano_grpo_orin/**
 # Only whitelist the per-omega winner Markdown report; the JSONL eval
 # logs themselves stay ignored (regenerable from the matrix YAML).
 !runs/w10_orin_full_fixed/
