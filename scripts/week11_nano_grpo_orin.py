@@ -63,7 +63,12 @@ if str(_REPO_ROOT) not in sys.path:
 import torch  # noqa: E402
 import torch.nn as nn  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
-from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: E402
+from transformers import (  # noqa: E402
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    LogitsProcessor,
+    LogitsProcessorList,
+)
 
 from tetrarl.sys.tegra_daemon import (  # noqa: E402
     TegrastatsDaemon,
@@ -129,6 +134,21 @@ def synthetic_reward(token_ids: torch.Tensor) -> torch.Tensor:
     return even.mean(dim=-1)
 
 
+class _SafeLogits(LogitsProcessor):
+    """Clamp non-finite / extreme logits so FP16 sampling stays stable.
+
+    After a few PPO/GRPO updates on FP16 weights the LM head can emit
+    non-finite or huge logits, which makes ``torch.multinomial`` raise
+    ``probability tensor contains inf/nan`` and trips a CUDA assert.
+    Clamping to ``[-1e4, 1e4]`` is benign for sampling (softmax saturates
+    well before that) and keeps the microbenchmark from crashing.
+    """
+
+    def __call__(self, input_ids, scores):  # type: ignore[override]
+        scores = scores.masked_fill(~torch.isfinite(scores), -1e4)
+        return scores.clamp(min=-1e4, max=1e4)
+
+
 # ---------------------------------------------------------------------------
 # One pass of N GRPO steps
 # ---------------------------------------------------------------------------
@@ -179,13 +199,16 @@ def run_pass(
         # ---- Generate K samples (no grad) ----
         with torch.no_grad():
             input_ids = fixed_prompt.repeat(args.group_size, 1)
+            attn_mask = torch.ones_like(input_ids)
             gen = model.generate(
                 input_ids=input_ids,
+                attention_mask=attn_mask,
                 do_sample=True,
                 max_new_tokens=args.gen_len,
                 top_p=0.9,
                 temperature=1.0,
                 pad_token_id=tok.pad_token_id,
+                logits_processor=LogitsProcessorList([_SafeLogits()]),
             )
         if device.type == "cuda":
             torch.cuda.synchronize()
@@ -238,7 +261,7 @@ def run_pass(
         t_bwd = time.perf_counter()
         bwd_ms = (t_bwd - t_fwd) * 1000.0
 
-        torch.nn.utils.clip_grad_norm_(params, 1.0)
+        torch.nn.utils.clip_grad_norm_(params, 0.5)
         optim.step()
         if device.type == "cuda":
             torch.cuda.synchronize()
@@ -369,7 +392,7 @@ def main() -> None:
     p.add_argument("--group-size", type=int, default=2)
     p.add_argument("--gen-len", type=int, default=12)
     p.add_argument("--prompt-len", type=int, default=4)
-    p.add_argument("--lr", type=float, default=1e-6)
+    p.add_argument("--lr", type=float, default=1e-7)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out-dir", required=True)
     p.add_argument("--no-tegrastats", action="store_true")
