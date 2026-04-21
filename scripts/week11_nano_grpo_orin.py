@@ -254,15 +254,24 @@ def run_pass(
         t_fwd = time.perf_counter()
         fwd_ms = (t_fwd - t1) * 1000.0
 
+        # Skip optimizer step if loss went non-finite — keeps the
+        # microbenchmark from poisoning subsequent generations.
+        loss_finite = bool(torch.isfinite(loss).item())
         optim.zero_grad(set_to_none=True)
-        loss.backward()
+        if loss_finite:
+            loss.backward()
+        else:
+            for p_ in params:
+                if p_.grad is None:
+                    p_.grad = torch.zeros_like(p_)
         if device.type == "cuda":
             torch.cuda.synchronize()
         t_bwd = time.perf_counter()
         bwd_ms = (t_bwd - t_fwd) * 1000.0
 
         torch.nn.utils.clip_grad_norm_(params, 0.5)
-        optim.step()
+        if loss_finite:
+            optim.step()
         if device.type == "cuda":
             torch.cuda.synchronize()
         t_opt = time.perf_counter()
@@ -401,6 +410,13 @@ def main() -> None:
         default="with_critic,without_critic",
         help="Comma-sep list. Allowed: with_critic, without_critic.",
     )
+    p.add_argument(
+        "--dtype",
+        choices=("bf16", "fp16"),
+        default="bf16",
+        help="Compute dtype on CUDA. bf16 is much more numerically stable for "
+        "this microbenchmark; fp16 retained for back-compat.",
+    )
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
@@ -410,7 +426,10 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dtype = torch.float16 if device.type == "cuda" else torch.float32
+    if device.type == "cuda":
+        dtype = torch.bfloat16 if args.dtype == "bf16" else torch.float16
+    else:
+        dtype = torch.float32
     print(f"[init] device={device} dtype={dtype}", flush=True)
 
     print(f"[init] loading tokenizer from {args.model}", flush=True)
