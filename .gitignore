@@ -49,6 +49,9 @@ runs/*
 !runs/w9_combined_cdf_per_omega.png
 !runs/w9_combined_cdf_per_omega.svg
 !runs/w9_combined_cdf_per_omega.png.summary.md
+!runs/w9_combined_cdf_with_nano.png
+!runs/w9_combined_cdf_with_nano.svg
+!runs/w9_combined_cdf_with_nano.png.summary.md
 !runs/w7_combined_cdf.png
 !runs/w7_combined_cdf.svg
 !runs/w7_pareto_4d_mac/
@@ -97,3 +100,11 @@ tetrarl/morl/c_morl/externals/**/logs/
 tetrarl/morl/c_morl/externals/**/trained_models/
 **/*.monitor.csv
 **/*.monitor.json
+!runs/w8_overhead_nano_real_dvfs/
+!runs/w8_overhead_nano_real_dvfs/**
+!runs/w9_nano_dag/
+!runs/w9_nano_dag/**
+!runs/w9_overhead_rebaseline_nano/
+!runs/w9_overhead_rebaseline_nano/**
+!runs/w9_dvfs_drl_nano/
+!runs/w9_dvfs_drl_nano/**

@@ -1,0 +1,4 @@
+env_name,agent_type,ablation,platform,seed,n_episodes,n_steps,mean_reward,override_fire_count,tail_p99_ms,mean_energy_j,mean_memory_util,wall_time_s
+CartPole-v1,dvfs_drl_multitask,none,orin_nano,0,200,2694,1.000000,924,0.185584,0.001202,0.120895,0.590835
+CartPole-v1,dvfs_drl_multitask,none,orin_nano,1,200,2664,1.000000,884,0.189998,0.001205,0.120343,0.694204
+CartPole-v1,dvfs_drl_multitask,none,orin_nano,2,200,2715,1.000000,935,0.187326,0.001209,0.121387,0.585936

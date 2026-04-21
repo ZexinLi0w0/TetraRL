@@ -134,9 +134,15 @@ class PsutilTelemetrySource:
             energy_remaining_j=self._energy,
         )
 
-    def update(self, latency_ms: float, energy_remaining_j: float) -> None:
+    def update(
+        self,
+        latency_ms: float,
+        energy_remaining_j: float,
+        memory_util: Optional[float] = None,
+    ) -> None:
         self._latency = float(latency_ms)
         self._energy = float(energy_remaining_j)
+        # memory_util is ignored: real RAM comes from psutil/tegrastats.
 
     def latest(self) -> _MemReading:
         return self._read()
@@ -153,9 +159,15 @@ class TegraTelemetrySource:
         self.daemon = TegrastatsDaemon(platform=platform, source="auto")
         self.daemon.start()
 
-    def update(self, latency_ms: float, energy_remaining_j: float) -> None:
+    def update(
+        self,
+        latency_ms: float,
+        energy_remaining_j: float,
+        memory_util: Optional[float] = None,
+    ) -> None:
         self._latency = float(latency_ms)
         self._energy = float(energy_remaining_j)
+        # memory_util is ignored: real RAM comes from psutil/tegrastats.
 
     def latest(self) -> _MemReading:
         r = self.daemon.latest()

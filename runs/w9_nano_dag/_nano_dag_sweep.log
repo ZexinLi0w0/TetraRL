@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/experiment/zexin/TetraRL/scripts/week9_nano_dag_sweep.py", line 395, in <module>
+    sys.exit(main())
+  File "/experiment/zexin/TetraRL/scripts/week9_nano_dag_sweep.py", line 371, in main
+    summary = run_sweep(
+  File "/experiment/zexin/TetraRL/scripts/week9_nano_dag_sweep.py", line 321, in run_sweep
+    result = _run_one_omega(
+  File "/experiment/zexin/TetraRL/scripts/week9_nano_dag_sweep.py", line 250, in _run_one_omega
+    telemetry.update(
+TypeError: TegraTelemetrySource.update() got an unexpected keyword argument 'memory_util'
