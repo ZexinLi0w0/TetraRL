@@ -12,6 +12,13 @@ The reward is a synthetic computable function of the generated tokens
 not alignment quality — the appendix only needs to demonstrate measurable
 response curves.
 
+With ``--rlhf-source ultrafeedback`` the synthetic even-token-id reward
+is replaced by a chosen-vs-rejected token-set overlap reward computed
+from real UltraFeedback (openbmb/UltraFeedback) preference pairs:
+``reward = |gen_set ∩ chosen_set| - |gen_set ∩ rejected_set|``,
+normalized by ``|gen_set|``. Pass ``--rlhf-n-prompts N`` to control how
+many UltraFeedback rows are sampled (default 200).
+
 Per-step measurements
 ---------------------
 - generate_ms / forward_ms / backward_ms / optim_ms / total_ms
@@ -134,6 +141,106 @@ def synthetic_reward(token_ids: torch.Tensor) -> torch.Tensor:
     return even.mean(dim=-1)
 
 
+def load_ultrafeedback_pairs(
+    tokenizer,
+    n_prompts: int,
+    max_len: int = 128,
+    cache_dir: Optional[str] = None,
+) -> List[dict]:
+    """Load (chosen, rejected) token-set pairs from openbmb/UltraFeedback.
+
+    For each row, the completion with the highest ``overall_score`` is
+    treated as ``chosen`` and the completion with the lowest score as
+    ``rejected``. Both responses are tokenized and reduced to a Python
+    ``set[int]`` of unique token ids; downstream the reward is computed
+    as ``|gen ∩ chosen| / |gen| - |gen ∩ rejected| / |gen|``.
+
+    Rows with fewer than two completions, or where all ``overall_score``
+    values are equal, are skipped. The ``datasets`` package is imported
+    lazily so synthetic-mode runs do not require it to be installed.
+    """
+    from datasets import load_dataset  # lazy import — only needed in this mode
+
+    ds = load_dataset(
+        "openbmb/UltraFeedback",
+        split=f"train[:{n_prompts * 2}]",
+        cache_dir=cache_dir,
+    )
+
+    pairs: List[dict] = []
+    for row in ds:
+        completions = row.get("completions") or []
+        if len(completions) < 2:
+            continue
+        scored = []
+        for c in completions:
+            score = c.get("overall_score")
+            resp = c.get("response")
+            if score is None or resp is None:
+                continue
+            try:
+                scored.append((float(score), resp))
+            except (TypeError, ValueError):
+                continue
+        if len(scored) < 2:
+            continue
+        scores = [s for s, _ in scored]
+        if max(scores) == min(scores):
+            continue
+        chosen_text = max(scored, key=lambda t: t[0])[1]
+        rejected_text = min(scored, key=lambda t: t[0])[1]
+        chosen_ids = tokenizer(
+            chosen_text,
+            return_tensors=None,
+            truncation=True,
+            max_length=max_len,
+        )["input_ids"]
+        rejected_ids = tokenizer(
+            rejected_text,
+            return_tensors=None,
+            truncation=True,
+            max_length=max_len,
+        )["input_ids"]
+        pairs.append(
+            {
+                "chosen_token_set": set(int(t) for t in chosen_ids),
+                "rejected_token_set": set(int(t) for t in rejected_ids),
+            }
+        )
+        if len(pairs) >= n_prompts:
+            break
+
+    print(
+        f"[ultrafeedback] loaded {len(pairs)} (chosen, rejected) "
+        f"token-set pairs",
+        flush=True,
+    )
+    return pairs
+
+
+def real_rlhf_reward(
+    token_ids: torch.Tensor, pair: dict, device: torch.device
+) -> torch.Tensor:
+    """Reward = (overlap with chosen) - (overlap with rejected), per group element.
+
+    token_ids: [B, gen_len] tensor of generated token ids.
+    pair: {"chosen_token_set": set, "rejected_token_set": set}.
+    Returns [B] tensor of float rewards in roughly [-1, 1].
+    """
+    chosen = pair["chosen_token_set"]
+    rejected = pair["rejected_token_set"]
+    rewards = []
+    for b in range(token_ids.shape[0]):
+        gen_set = set(token_ids[b].tolist())
+        if not gen_set:
+            rewards.append(0.0)
+            continue
+        chosen_ovl = len(gen_set & chosen) / len(gen_set)
+        rejected_ovl = len(gen_set & rejected) / len(gen_set)
+        rewards.append(chosen_ovl - rejected_ovl)
+    return torch.tensor(rewards, dtype=torch.float32, device=device)
+
+
 class _SafeLogits(LogitsProcessor):
     """Clamp non-finite / extreme logits so FP16 sampling stays stable.
 
@@ -166,8 +273,11 @@ def run_pass(
     dtype: torch.dtype,
     args,
     out_dir: Path,
+    rlhf_pairs: Optional[List[dict]] = None,
+    rlhf_source: str = "synthetic",
 ) -> dict:
     print(f"\n[pass={pass_name}] with_critic={with_critic}", flush=True)
+    print(f"[pass={pass_name}] reward_source={rlhf_source}", flush=True)
 
     value_head = ValueHead(hidden_size, dtype).to(device)
     value_head.train()
@@ -217,7 +327,11 @@ def run_pass(
 
         # gen: [K, prompt_len + gen_len]
         completion_ids = gen[:, args.prompt_len :]  # [K, gen_len]
-        rewards = synthetic_reward(completion_ids)  # [K], float
+        if rlhf_source == "ultrafeedback" and rlhf_pairs:
+            pair = rlhf_pairs[step % len(rlhf_pairs)]
+            rewards = real_rlhf_reward(completion_ids, pair, device=device)
+        else:
+            rewards = synthetic_reward(completion_ids)  # [K], float
         rewards = rewards.to(dtype=torch.float32)
 
         # ---- Forward with grad for logprobs (+ hidden states if with-critic) ----
@@ -417,6 +531,9 @@ def main() -> None:
         help="Compute dtype on CUDA. bf16 is much more numerically stable for "
         "this microbenchmark; fp16 retained for back-compat.",
     )
+    p.add_argument("--rlhf-source", choices=["synthetic", "ultrafeedback"], default="synthetic")
+    p.add_argument("--rlhf-n-prompts", type=int, default=200)
+    p.add_argument("--rlhf-dataset-cache", type=str, default=None)
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
@@ -454,6 +571,12 @@ def main() -> None:
         [[bos] * args.prompt_len], device=device, dtype=torch.long
     )
 
+    rlhf_pairs = None
+    if args.rlhf_source == "ultrafeedback":
+        rlhf_pairs = load_ultrafeedback_pairs(
+            tok, args.rlhf_n_prompts, max_len=128, cache_dir=args.rlhf_dataset_cache,
+        )
+
     pass_results: dict = {}
     for pass_name in [s.strip() for s in args.passes.split(",")]:
         if pass_name not in ("with_critic", "without_critic"):
@@ -470,6 +593,8 @@ def main() -> None:
             dtype=dtype,
             args=args,
             out_dir=out_dir,
+            rlhf_source=args.rlhf_source,
+            rlhf_pairs=rlhf_pairs,
         )
 
     summary = {
@@ -485,6 +610,8 @@ def main() -> None:
         "uname": " ".join(_pyplatform.uname()),
         "torch_version": torch.__version__,
         "cuda_available": torch.cuda.is_available(),
+        "rlhf_source": args.rlhf_source,
+        "rlhf_n_prompts": args.rlhf_n_prompts if args.rlhf_source == "ultrafeedback" else None,
         "passes": pass_results,
     }
     summary_path = out_dir / "summary.json"
