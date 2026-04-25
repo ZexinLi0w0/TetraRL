@@ -58,6 +58,11 @@ runs/*
 !runs/w7_pareto_4d_mac/**
 !runs/w10_orin_full/
 !runs/w10_orin_full/**
+# Whitelist P9 smoke runs (TegrastatsDaemon real-telemetry verification)
+!runs/p9_override_sweep_real_orin/
+!runs/p9_override_sweep_real_orin/**
+!runs/p9_w10_nano_real_telemetry_smoke/
+!runs/p9_w10_nano_real_telemetry_smoke/**
 !runs/w10_nano_matrix/
 !runs/w10_nano_matrix/**
 !runs/w11_nano_grpo_orin/
