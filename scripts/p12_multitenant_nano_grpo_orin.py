@@ -441,15 +441,19 @@ def run_grpo_pass(
     else:
         peak_alloc_mb = 0.0
 
-    if len(readings) >= 2:
-        ts = np.array([r.ts_monotonic for r in readings])
-        p_gpu = np.array([r.vdd_gpu_soc_mw for r in readings]) / 1000.0
-        p_cpu = np.array([r.vdd_cpu_cv_mw for r in readings]) / 1000.0
+    # Snapshot before iteration: TegrastatsDaemon's join has a 2s timeout, and
+    # the daemon thread can append one or two more readings after teg.stop()
+    # returns. Without snapshotting, dt and p_cpu disagree on length.
+    snap = list(readings)
+    if len(snap) >= 2:
+        ts = np.array([r.ts_monotonic for r in snap])
+        p_gpu = np.array([r.vdd_gpu_soc_mw for r in snap]) / 1000.0
+        p_cpu = np.array([r.vdd_cpu_cv_mw for r in snap]) / 1000.0
         dt = np.diff(ts)
         energy_gpu_j = float(np.sum(0.5 * (p_gpu[:-1] + p_gpu[1:]) * dt))
         energy_cpu_j = float(np.sum(0.5 * (p_cpu[:-1] + p_cpu[1:]) * dt))
-        mem_peak_mb = int(max(r.ram_used_mb for r in readings))
-        gpu_util_mean = float(np.mean([r.gr3d_freq_pct for r in readings]))
+        mem_peak_mb = int(max(r.ram_used_mb for r in snap))
+        gpu_util_mean = float(np.mean([r.gr3d_freq_pct for r in snap]))
     else:
         energy_gpu_j = energy_cpu_j = 0.0
         mem_peak_mb = 0
@@ -507,6 +511,7 @@ def run_grpo_pass(
         "step_optim": stats(opts),
         "final_reward_mean": final_reward_mean,
         "oom": oom,
+        "n_tegrastats_samples": len(snap),
     }
     del value_head, optim, params
     if device.type == "cuda":
@@ -631,7 +636,7 @@ def run_grpo_main(args: argparse.Namespace) -> int:
         "cuda_available": torch.cuda.is_available(),
         "tenants_enabled": tenants_enabled,
         "warmup_s": args.warmup_s,
-        "n_tegrastats_samples": len(readings),
+        "n_tegrastats_samples": int(pass_result.get("n_tegrastats_samples", 0)),
         "grpo": pass_result,
         "override": {
             "fire_count": int(override_layer.fire_count),
