@@ -542,10 +542,10 @@ def test_eval_config_round_trip_dict_preserves_use_real_telemetry():
 def test_make_telemetry_orin_with_real_tele_no_tegrastats_falls_back_with_warning(monkeypatch):
     """P9: --use-real-telemetry on a host without tegrastats binary should
     fall back to Mac stub with a RuntimeWarning rather than crash."""
-    import tetrarl.eval.runner as runner_mod
-
     # Force shutil.which to return None for "tegrastats" so we simulate Mac.
     import shutil as _shutil
+
+    import tetrarl.eval.runner as runner_mod
     real_which = _shutil.which
 
     def fake_which(name, *a, **kw):
@@ -565,11 +565,11 @@ def test_make_telemetry_orin_with_real_tele_uses_real_when_daemon_starts(monkeyp
     """P9: when TegrastatsDaemon import + start succeed, _make_telemetry
     must return the real wrapper (not the Mac stub). Uses a fake daemon
     so the test runs on Mac without a real tegrastats binary."""
-    import tetrarl.eval.runner as runner_mod
-    import tetrarl.sys.tegra_daemon as daemon_mod
-
     # Pretend tegrastats is on PATH so the binary check passes.
     import shutil as _shutil
+
+    import tetrarl.eval.runner as runner_mod
+    import tetrarl.sys.tegra_daemon as daemon_mod
 
     def fake_which(name, *a, **kw):
         if name == "tegrastats":
@@ -633,9 +633,10 @@ def test_make_telemetry_mac_stub_with_real_tele_falls_back_with_warning():
 def test_real_jetson_telemetry_warmup_waits_for_first_reading(monkeypatch):
     """P9 fix: _RealJetsonTelemetry must wait for the first daemon reading
     so the eval loop sees real memory_util, not the None-fallback 0.0."""
+    import shutil as _shutil
+
     import tetrarl.eval.runner as runner_mod
     import tetrarl.sys.tegra_daemon as daemon_mod
-    import shutil as _shutil
 
     monkeypatch.setattr(_shutil, "which", lambda name, *a, **kw: "/fake/tegrastats" if name == "tegrastats" else None)
 
@@ -674,9 +675,10 @@ def test_real_jetson_telemetry_warmup_waits_for_first_reading(monkeypatch):
 def test_real_jetson_telemetry_warmup_timeout_warns(monkeypatch):
     """P9 fix: if the daemon never produces a reading, the wrapper warns
     rather than blocking forever."""
+    import shutil as _shutil
+
     import tetrarl.eval.runner as runner_mod
     import tetrarl.sys.tegra_daemon as daemon_mod
-    import shutil as _shutil
 
     monkeypatch.setattr(_shutil, "which", lambda name, *a, **kw: "/fake/tegrastats" if name == "tegrastats" else None)
 
