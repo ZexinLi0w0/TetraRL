@@ -1,0 +1,12 @@
+{
+  "agent": "dqn",
+  "env": "CartPole-v1",
+  "framework_overhead_pct": 11.89844909051547,
+  "log_file": "/data/zli/TetraRL-headtohead/TetraRL/runs/p11_dst_headtohead/r3_seed0/r3_train.log",
+  "mean_deadline_miss_rate": null,
+  "parse_notes": "overhead_source=estimated; miss_source=none; log[explicit_overhead=no; explicit_miss_rate=no; coord_lines=0; episode_lines=292]; tb[event_files=2; unique_tags=17; overhead_tag=miss; miss_tag=miss]; overhead_est[estimated_from_log; episodes_used=292; productive_s=201.75; wall_s=229.00]; miss_est[no_coord_records]",
+  "parse_status": "partial",
+  "step_count": 50000,
+  "tensorboard_runs_dir": "/data/zli/TetraRL-headtohead/TetraRL/runs/p11_dst_headtohead/r3_seed0/runs",
+  "wall_clock_s": 229.0
+}

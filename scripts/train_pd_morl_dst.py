@@ -24,6 +24,16 @@ from tetrarl.morl.preference_sampling import (
     sample_preference,
 )
 
+DST_REFERENCE_POINT = np.array([0.0, -25.0])
+DST_REFERENCE_HV = 229.0
+
+
+def make_anchors_2d(n: int) -> np.ndarray:
+    if n == 1:
+        return np.array([[0.5, 0.5]], dtype=np.float32)
+    ws = np.linspace(0.0, 1.0, n, dtype=np.float32)
+    return np.column_stack([ws, 1.0 - ws])
+
 
 def evaluate(
     agent: PDMORLAgent, env_cls: type, num_objectives: int, seed: int = 42
@@ -79,6 +89,8 @@ def main() -> None:
     parser.add_argument("--target-update-freq", type=int, default=1000)
     parser.add_argument("--n-relabel", type=int, default=4)
     parser.add_argument("--epsilon-decay", type=int, default=50_000)
+    parser.add_argument("--n-anchors", type=int, default=11)
+    parser.add_argument("--episodes-per-anchor", type=int, default=5)
     args = parser.parse_args()
 
     if args.device == "auto":
@@ -177,8 +189,81 @@ def main() -> None:
     with open(os.path.join(args.logdir, "progress.json"), "w") as f:
         json.dump(progress, f, indent=2)
 
-    _, final_hv = evaluate(agent, DeepSeaTreasure, n_objectives)
-    print(f"\nTraining complete. Final HV={final_hv:.2f} (best={best_hv:.2f})")
+    best_model_path = os.path.join(args.logdir, "best_model.pt")
+    if os.path.exists(best_model_path):
+        eval_model_path = best_model_path
+    else:
+        eval_model_path = os.path.join(args.logdir, "final_model.pt")
+
+    eval_agent = PDMORLAgent(
+        state_dim=state_dim,
+        action_dim=action_dim,
+        n_objectives=n_objectives,
+        hidden_dim=args.hidden_dim,
+        lr=args.lr,
+        gamma=args.gamma,
+        batch_size=args.batch_size,
+        target_update_freq=args.target_update_freq,
+        buffer_capacity=args.buffer_size,
+        n_relabel=args.n_relabel,
+        epsilon_decay=args.epsilon_decay,
+        device=device,
+    )
+    eval_agent.load(eval_model_path)
+
+    print(
+        f"Running final eval: {args.n_anchors} anchors x "
+        f"{args.episodes_per_anchor} episodes ..."
+    )
+    anchors = make_anchors_2d(args.n_anchors)
+    all_returns: list[np.ndarray] = []
+    eval_t0 = time.time()
+    for omega in anchors:
+        for ep in range(args.episodes_per_anchor):
+            eval_env = DeepSeaTreasure()
+            obs, _ = eval_env.reset(seed=42 + ep)
+            total_reward = np.zeros(n_objectives, dtype=np.float32)
+            done = False
+            step = 0
+            while not done and step < 200:
+                action = eval_agent.act(obs, omega, explore=False)
+                obs, reward_vec, terminated, truncated, _ = eval_env.step(action)
+                total_reward += reward_vec
+                done = terminated or truncated
+                step += 1
+            all_returns.append(total_reward)
+            eval_env.close()
+    eval_elapsed = time.time() - eval_t0
+
+    returns_arr = np.array(all_returns)
+    front = pareto_filter(returns_arr)
+    achieved_hv = float(hypervolume(front, DST_REFERENCE_POINT))
+    gap_pct = (1.0 - achieved_hv / DST_REFERENCE_HV) * 100.0
+
+    results = {
+        "baseline": "pd_morl",
+        "achieved_hv": round(achieved_hv, 4),
+        "reference_hv": DST_REFERENCE_HV,
+        "gap_pct": round(float(gap_pct), 2),
+        "pareto_front": front.tolist(),
+        "all_returns": returns_arr.tolist(),
+        "anchors": anchors.tolist(),
+        "reference_point": DST_REFERENCE_POINT.tolist(),
+        "model_path": eval_model_path,
+        "n_anchors": args.n_anchors,
+        "episodes_per_anchor": args.episodes_per_anchor,
+        "step_count": int(eval_agent.step_count),
+        "device": device,
+        "eval_time_s": round(eval_elapsed, 2),
+    }
+
+    eval_path = os.path.join(args.logdir, "eval.json")
+    with open(eval_path, "w") as f:
+        json.dump(results, f, indent=2)
+
+    print(
+        f"\nTraining complete. Final HV={achieved_hv:.2f} (in-loop best={best_hv:.2f})"
+    )
     print(f"Results saved to: {args.logdir}")
 
 
