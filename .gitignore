@@ -77,6 +77,22 @@ runs/*
 !runs/p10_dst_multiseed_orin/dst_*.md
 !runs/p10_dst_multiseed_orin/dst_*.tex
 !runs/p10_dst_multiseed_orin/multi_seed.log
+# P11 head-to-head DST sweep
+!runs/p11_dst_headtohead/
+!runs/p11_dst_headtohead/*.csv
+!runs/p11_dst_headtohead/*.md
+!runs/p11_dst_headtohead/*.tex
+!runs/p11_dst_headtohead/*_seed*/
+!runs/p11_dst_headtohead/*_seed*/eval.json
+!runs/p11_dst_headtohead/*_seed*/progress.json
+!runs/p11_dst_headtohead/*_seed*/r3_native_metrics.json
+!runs/p11_dst_headtohead/*_seed*/r3_train.log
+!runs/p11_dst_headtohead/*_seed*/train.log
+# Re-ignore orchestration sentinels and model checkpoints inside P11 sweep
+runs/p11_dst_headtohead/*_seed*/.done
+runs/p11_dst_headtohead/*_seed*/.failed
+runs/p11_dst_headtohead/*_seed*/*.pt
+runs/p11_dst_headtohead/*_seed*/*.pt.duojoule
 !runs/p10_nano_dag_multiseed/
 !runs/p10_nano_dag_multiseed/nano_dag_*.csv
 !runs/p10_nano_dag_multiseed/nano_dag_*.md

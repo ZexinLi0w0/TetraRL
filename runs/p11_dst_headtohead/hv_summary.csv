@@ -1,0 +1,5 @@
+baseline,n_seeds_ok,mean_hv,std_hv,min_hv,max_hv,mean_n_pareto,native_metric_value,native_metric_name,notes
+tetrarl_pref_ppo,3,746.6667,626.5663,24.0000,1138.0000,4.00,,,TetraRL pref-conditioned PPO (this paper)
+pd_morl,3,800.0000,81.9024,744.0000,894.0000,1.67,,,Basaklar et al. ICLR 2023; in-tree port
+duojoule,3,833.3333,139.4322,744.0000,994.0000,1.67,,,"Yan et al. RTSS 2024, our re-implementation (original closed-source)"
+r3,3,,,,,,11.7250,framework_overhead_pct,"Li et al. RTSS 2023; targets timing-bound DRL training, not Pareto front. HV not applicable; reported on native metric."

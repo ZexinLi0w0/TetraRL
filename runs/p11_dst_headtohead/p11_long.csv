@@ -1,0 +1,13 @@
+baseline,seed,achieved_hv,n_pareto,framework_overhead_pct,mean_deadline_miss_rate,status
+tetrarl_pref_ppo,0,1138.000000,6,,,ok
+tetrarl_pref_ppo,1,24.000000,1,,,ok
+tetrarl_pref_ppo,2,1078.000000,5,,,ok
+pd_morl,0,744.000000,1,,,ok
+pd_morl,1,894.000000,2,,,ok
+pd_morl,2,762.000000,2,,,ok
+duojoule,0,744.000000,1,,,ok
+duojoule,1,994.000000,2,,,ok
+duojoule,2,762.000000,2,,,ok
+r3,0,,,11.8984,,ok
+r3,1,,,11.9842,,ok
+r3,2,,,11.2923,,ok

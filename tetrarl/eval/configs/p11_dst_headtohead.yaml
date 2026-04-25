@@ -1,0 +1,30 @@
+experiment: p11_dst_headtohead
+description: |
+  Controlled head-to-head DST comparison: TetraRL pref-PPO vs PD-MORL vs DuoJoule (our re-impl)
+  vs R3 (its native metric only). 200k env steps per seed, 3 seeds per baseline.
+env: deep_sea_treasure
+ref_point: [0.0, -25.0]
+n_anchors: 11
+episodes_per_anchor: 5
+frames: 200000
+seeds: [0, 1, 2]
+hardware: server1_rtx_a4500
+out_root: runs/p11_dst_headtohead
+
+baselines:
+  - name: tetrarl_pref_ppo
+    train_script: scripts/train_pref_ppo_dst.py
+    eval_metric: hypervolume
+    notes: "TetraRL pref-conditioned PPO (this paper)"
+  - name: pd_morl
+    train_script: scripts/train_pd_morl_dst.py
+    eval_metric: hypervolume
+    notes: "Basaklar et al. ICLR 2023; in-tree port"
+  - name: duojoule
+    train_script: scripts/train_duojoule_dst.py
+    eval_metric: hypervolume
+    notes: "Yan et al. RTSS 2024, our re-implementation (original closed-source)"
+  - name: r3
+    train_script: scripts/run_p11_r3_native.sh
+    eval_metric: framework_overhead_pct
+    notes: "Li et al. RTSS 2023; targets timing-bound DRL training, not Pareto front. HV not applicable; reported on native metric."
