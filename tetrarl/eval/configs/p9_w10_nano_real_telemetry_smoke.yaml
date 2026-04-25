@@ -1,0 +1,45 @@
+# P9 smoke: one cell of the W10 Nano evaluation matrix with REAL
+# TegrastatsDaemon-backed telemetry. Closes paper Section IX deferred item
+# #5. The original W10 matrix has 60 cells; here we run 3 omega corners ×
+# 1 seed × 5 episodes for a wall-time-bounded smoke that demonstrates
+# real mean_energy_j and mean_memory_util populate (not stub constants).
+configs:
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: none
+    platform: orin_nano
+    n_episodes: 5
+    seed: 0
+    out_dir: runs/p9_w10_nano_real_telemetry_smoke
+    extra:
+      omega: [1.0, 0.0, 0.0, 0.0]
+      omega_idx: 0
+      omega_name: reward
+      jsonl_name: none__preference_ppo__CartPole__reward__seed0__o0.jsonl
+    n_envs: 1
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: none
+    platform: orin_nano
+    n_episodes: 5
+    seed: 0
+    out_dir: runs/p9_w10_nano_real_telemetry_smoke
+    extra:
+      omega: [0.0, 1.0, 0.0, 0.0]
+      omega_idx: 1
+      omega_name: latency
+      jsonl_name: none__preference_ppo__CartPole__latency__seed0__o1.jsonl
+    n_envs: 1
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: none
+    platform: orin_nano
+    n_episodes: 5
+    seed: 0
+    out_dir: runs/p9_w10_nano_real_telemetry_smoke
+    extra:
+      omega: [0.0, 0.0, 1.0, 0.0]
+      omega_idx: 2
+      omega_name: energy
+      jsonl_name: none__preference_ppo__CartPole__energy__seed0__o2.jsonl
+    n_envs: 1
