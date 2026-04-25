@@ -1,0 +1,51 @@
+# P9 smoke: short override-sweep on Orin AGX with REAL TegrastatsDaemon-backed
+# telemetry. Closes paper Section IX deferred item #4. The 4 ablations + the
+# baseline (5 configs) cover the override layer's behaviour under real
+# energy/memory readings; n_episodes=20 gives the TegrastatsDaemon multiple EMA samples per cell while keeping wall-time under ~5 minutes
+# even on the Orin AGX.
+configs:
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: none
+    platform: orin_agx
+    n_episodes: 20
+    seed: 0
+    out_dir: runs/p9_override_sweep_real_orin
+    extra:
+      jsonl_name: none__preference_ppo__seed0.jsonl
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: preference_plane
+    platform: orin_agx
+    n_episodes: 20
+    seed: 0
+    out_dir: runs/p9_override_sweep_real_orin
+    extra:
+      jsonl_name: pref_plane__preference_ppo__seed0.jsonl
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: resource_manager
+    platform: orin_agx
+    n_episodes: 20
+    seed: 0
+    out_dir: runs/p9_override_sweep_real_orin
+    extra:
+      jsonl_name: resource_manager__preference_ppo__seed0.jsonl
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: rl_arbiter
+    platform: orin_agx
+    n_episodes: 20
+    seed: 0
+    out_dir: runs/p9_override_sweep_real_orin
+    extra:
+      jsonl_name: rl_arbiter__preference_ppo__seed0.jsonl
+  - env_name: CartPole-v1
+    agent_type: preference_ppo
+    ablation: override_layer
+    platform: orin_agx
+    n_episodes: 20
+    seed: 0
+    out_dir: runs/p9_override_sweep_real_orin
+    extra:
+      jsonl_name: override_layer__preference_ppo__seed0.jsonl

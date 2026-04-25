@@ -1,0 +1,6 @@
+env_name,agent_type,ablation,platform,seed,n_episodes,n_steps,mean_reward,override_fire_count,tail_p99_ms,mean_energy_j,mean_memory_util,wall_time_s
+CartPole-v1,preference_ppo,none,orin_agx,0,20,189,1.000000,189,0.090100,0.001000,0.245985,0.021793
+CartPole-v1,preference_ppo,preference_plane,orin_agx,0,20,189,1.000000,189,0.089842,0.001000,0.245985,0.021955
+CartPole-v1,preference_ppo,resource_manager,orin_agx,0,20,189,1.000000,189,0.083284,0.001000,0.245985,0.020824
+CartPole-v1,preference_ppo,rl_arbiter,orin_agx,0,20,189,1.000000,189,0.058920,0.001000,0.245985,0.020784
+CartPole-v1,preference_ppo,override_layer,orin_agx,0,20,347,1.000000,0,0.077553,0.001363,0.245985,0.035341
