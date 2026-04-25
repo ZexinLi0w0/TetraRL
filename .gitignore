@@ -124,6 +124,8 @@ runs/p11_dst_headtohead/*_seed*/*.pt.duojoule
 !runs/p12_multitenant_grpo/without_critic_seed*/per_step_grpo.csv
 !runs/p12_multitenant_grpo/without_critic_seed*/perception.csv
 !runs/p12_multitenant_grpo/without_critic_seed*/llm_inf.csv
+# P15 Phase 0 deliverable (Atari Nano probe report)
+!runs/p15_atari_nano_probe.md
 # Only whitelist the per-omega winner Markdown report; the JSONL eval
 # logs themselves stay ignored (regenerable from the matrix YAML).
 !runs/w10_orin_full_fixed/
