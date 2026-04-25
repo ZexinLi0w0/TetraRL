@@ -90,6 +90,24 @@ runs/*
 !runs/p10_nano_grpo_real_rlhf_orin/response_curves.png
 !runs/p10_nano_grpo_real_rlhf_orin/response_curves.pdf
 !runs/p10_nano_grpo_real_rlhf_orin/response_curves.svg
+# Whitelist P12 multi-tenant Nano-GRPO deliverables (concurrent perception + LLM inference + GRPO RLHF on Orin AGX)
+!runs/p12_multitenant_grpo/
+!runs/p12_multitenant_grpo/comparison_table.md
+!runs/p12_multitenant_grpo/summary.csv
+!runs/p12_multitenant_grpo/contention_curves.png
+!runs/p12_multitenant_grpo/contention_curves.pdf
+!runs/p12_multitenant_grpo/run_matrix.sh
+!runs/p12_multitenant_grpo/matrix.log
+!runs/p12_multitenant_grpo/with_critic_seed*/
+!runs/p12_multitenant_grpo/with_critic_seed*/summary.json
+!runs/p12_multitenant_grpo/with_critic_seed*/per_step_grpo.csv
+!runs/p12_multitenant_grpo/with_critic_seed*/perception.csv
+!runs/p12_multitenant_grpo/with_critic_seed*/llm_inf.csv
+!runs/p12_multitenant_grpo/without_critic_seed*/
+!runs/p12_multitenant_grpo/without_critic_seed*/summary.json
+!runs/p12_multitenant_grpo/without_critic_seed*/per_step_grpo.csv
+!runs/p12_multitenant_grpo/without_critic_seed*/perception.csv
+!runs/p12_multitenant_grpo/without_critic_seed*/llm_inf.csv
 # Only whitelist the per-omega winner Markdown report; the JSONL eval
 # logs themselves stay ignored (regenerable from the matrix YAML).
 !runs/w10_orin_full_fixed/
@@ -103,6 +121,8 @@ checkpoints/
 # Logs
 *.log
 logs/
+# Re-whitelist P12 matrix.log (small reproducibility log) — must come after *.log
+!runs/p12_multitenant_grpo/matrix.log
 
 # Jetson / tegrastats
 tegrastats_*.csv
