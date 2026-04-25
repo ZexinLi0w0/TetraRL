@@ -15,7 +15,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
-
 # --- shared utilities ------------------------------------------------------
 
 
@@ -264,19 +263,19 @@ class C51Algo:
             Tz = r.unsqueeze(1) + self.gamma * (1.0 - d.unsqueeze(1)) * self.support.unsqueeze(0)
             Tz = Tz.clamp(self.v_min, self.v_max)
             b = (Tz - self.v_min) / self.delta_z
-            l = b.floor().long()
+            lo = b.floor().long()
             u = b.ceil().long()
-            l = l.clamp(0, self.n_atoms - 1)
+            lo = lo.clamp(0, self.n_atoms - 1)
             u = u.clamp(0, self.n_atoms - 1)
             m = torch.zeros_like(p_next)
-            # Handle l == u edge case by adding to both sides as (u - b) and (b - l).
+            # Handle lo == u edge case by adding to both sides as (u - b) and (b - lo).
             offset = torch.arange(B, device=self.device).unsqueeze(1) * self.n_atoms
-            m.view(-1).index_add_(0, (l + offset).view(-1), (p_next * (u.float() - b)).view(-1))
-            m.view(-1).index_add_(0, (u + offset).view(-1), (p_next * (b - l.float())).view(-1))
-            # Equal indices: ensure mass is preserved (when b is integer, both u-b and b-l = 0).
-            eq = (l == u)
+            m.view(-1).index_add_(0, (lo + offset).view(-1), (p_next * (u.float() - b)).view(-1))
+            m.view(-1).index_add_(0, (u + offset).view(-1), (p_next * (b - lo.float())).view(-1))
+            # Equal indices: ensure mass is preserved (when b is integer, both u-b and b-lo = 0).
+            eq = (lo == u)
             if eq.any():
-                m.view(-1).index_add_(0, (l + offset).view(-1), (p_next * eq.float()).view(-1))
+                m.view(-1).index_add_(0, (lo + offset).view(-1), (p_next * eq.float()).view(-1))
 
         dist = self._dist(s)  # (B, A, atoms)
         log_p = torch.log(dist[torch.arange(B), a].clamp(min=1e-8))

@@ -20,7 +20,6 @@ import numpy as np
 
 from tetrarl.morl.system_wrapper import SystemWrapper, WrapperKnobs
 
-
 # --- helpers ---------------------------------------------------------------
 
 
@@ -138,9 +137,17 @@ class R3Wrapper(SystemWrapper):
         if last_lat > self.deadline_ms:
             self._n_miss += 1
         # Adjust batch
-        if self._latency_ema_ms > self.deadline_ms and self._current_batch and self._current_batch > self.min_batch:
+        if (
+            self._latency_ema_ms > self.deadline_ms
+            and self._current_batch
+            and self._current_batch > self.min_batch
+        ):
             self._current_batch = max(self.min_batch, self._current_batch // 2)
-        elif self._latency_ema_ms < 0.5 * self.deadline_ms and self._current_batch and self._current_batch < self.max_batch:
+        elif (
+            self._latency_ema_ms < 0.5 * self.deadline_ms
+            and self._current_batch
+            and self._current_batch < self.max_batch
+        ):
             self._current_batch = min(self.max_batch, self._current_batch * 2)
         return WrapperKnobs(batch_size=self._current_batch)
 
@@ -200,9 +207,17 @@ class DuoJouleWrapper(SystemWrapper):
         self._energy_ema_j = (
             (1.0 - self.ema_alpha) * self._energy_ema_j + self.ema_alpha * last_energy
         )
-        if self._energy_ema_j > self.energy_target_j and self._current_batch and self._current_batch > self.min_batch:
+        if (
+            self._energy_ema_j > self.energy_target_j
+            and self._current_batch
+            and self._current_batch > self.min_batch
+        ):
             self._current_batch = max(self.min_batch, self._current_batch // 2)
-        elif self._energy_ema_j < 0.5 * self.energy_target_j and self._current_batch and self._current_batch < self.max_batch:
+        elif (
+            self._energy_ema_j < 0.5 * self.energy_target_j
+            and self._current_batch
+            and self._current_batch < self.max_batch
+        ):
             self._current_batch = min(self.max_batch, self._current_batch * 2)
         return WrapperKnobs(batch_size=self._current_batch)
 
