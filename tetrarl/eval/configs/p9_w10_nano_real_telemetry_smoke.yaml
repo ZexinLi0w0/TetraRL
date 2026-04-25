@@ -1,14 +1,14 @@
 # P9 smoke: one cell of the W10 Nano evaluation matrix with REAL
 # TegrastatsDaemon-backed telemetry. Closes paper Section IX deferred item
 # #5. The original W10 matrix has 60 cells; here we run 3 omega corners ×
-# 1 seed × 5 episodes for a wall-time-bounded smoke that demonstrates
+# 1 seed × 20 episodes for a wall-time-bounded smoke that demonstrates
 # real mean_energy_j and mean_memory_util populate (not stub constants).
 configs:
   - env_name: CartPole-v1
     agent_type: preference_ppo
     ablation: none
     platform: orin_nano
-    n_episodes: 5
+    n_episodes: 20
     seed: 0
     out_dir: runs/p9_w10_nano_real_telemetry_smoke
     extra:
@@ -21,7 +21,7 @@ configs:
     agent_type: preference_ppo
     ablation: none
     platform: orin_nano
-    n_episodes: 5
+    n_episodes: 20
     seed: 0
     out_dir: runs/p9_w10_nano_real_telemetry_smoke
     extra:
@@ -34,7 +34,7 @@ configs:
     agent_type: preference_ppo
     ablation: none
     platform: orin_nano
-    n_episodes: 5
+    n_episodes: 20
     seed: 0
     out_dir: runs/p9_w10_nano_real_telemetry_smoke
     extra:
