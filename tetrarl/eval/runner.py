@@ -376,12 +376,46 @@ class _RealJetsonTelemetry:
     ``latest()`` returns a :class:`_StubReading`-shaped object so the
     existing ``_telemetry_to_hw`` adapter can be reused without a
     second adapter function.
+
+    P9 fix: ``__init__`` waits up to ``_WARMUP_TIMEOUT_S`` (polling in
+    ``_WARMUP_POLL_S`` increments) for the daemon's first reading. Short
+    smoke runs (5 episodes of CartPole, ~10 ms total) finish faster than
+    the daemon's first dispatch (~50-100 ms), so without this warmup
+    ``latest()`` would return ``None`` for the entire run and the eval
+    loop would record ``memory_util=0.0`` --- the same effective failure
+    as the stub-fallback bug. If the warmup times out we emit a
+    :class:`RuntimeWarning` but do not raise; the loop continues with
+    ``memory_util=0.0`` until the daemon catches up.
     """
+
+    # Polling parameters for the first-reading warmup. Exposed as class
+    # constants so tests can monkeypatch them to keep the suite fast.
+    _WARMUP_TIMEOUT_S = 2.0
+    _WARMUP_POLL_S = 0.025
 
     def __init__(self, daemon: Any, initial_energy_j: float = 1000.0):
         self._daemon = daemon
         self._latency = 0.0
         self._energy = float(initial_energy_j)
+        self._stopped = False
+
+        # Wait for the daemon's first reading. The daemon was already
+        # started by _make_telemetry before constructing us; here we
+        # just poll latest() until it stops returning None or until
+        # _WARMUP_TIMEOUT_S elapses.
+        deadline = time.monotonic() + float(self._WARMUP_TIMEOUT_S)
+        while time.monotonic() < deadline:
+            if self._daemon.latest() is not None:
+                break
+            time.sleep(float(self._WARMUP_POLL_S))
+        else:
+            warnings.warn(
+                f"TegrastatsDaemon produced no reading after "
+                f"{self._WARMUP_TIMEOUT_S}s; memory_util will be 0.0 "
+                "until the daemon catches up",
+                RuntimeWarning,
+                stacklevel=2,
+            )
 
     def update(
         self,
@@ -411,8 +445,26 @@ class _RealJetsonTelemetry:
         )
 
     def stop(self) -> None:
+        """Release the underlying daemon subprocess.
+
+        Safe to call multiple times; idempotent. EvalRunner.run() and
+        _run_vec_env() call this in their finally blocks so a sweep of
+        many configs does not leak a tegrastats subprocess per config.
+        """
+        if self._stopped:
+            return
+        self._stopped = True
         try:
             self._daemon.stop()
+        except Exception:
+            pass
+
+    def __del__(self):
+        # Defensive: if the eval loop forgets to call stop(), the GC
+        # path still releases the subprocess. Wrapped in try/except
+        # because __del__ must never raise.
+        try:
+            self.stop()
         except Exception:
             pass
 
@@ -754,6 +806,12 @@ class EvalRunner:
                         done = bool(terminated or truncated)
             finally:
                 env.close()
+                # P9 fix: release the tegrastats subprocess (if any) so
+                # sweeping many configs doesn't leak a daemon per run.
+                # getattr keeps the stub path (no .stop()) intact.
+                _stop = getattr(telemetry, "stop", None)
+                if callable(_stop):
+                    _stop()
         wall_time_s = time.perf_counter() - t0
 
         tail_p99_ms, mean_energy_j, mean_memory_util, mean_reward = _aggregate_metrics(
@@ -987,6 +1045,12 @@ class EvalRunner:
                             per_env_last_action[i] = int(action_i)
             finally:
                 vec_env.close()
+                # P9 fix: release the tegrastats subprocess (if any) so
+                # sweeping many configs doesn't leak a daemon per run.
+                # getattr keeps the stub path (no .stop()) intact.
+                _stop = getattr(telemetry, "stop", None)
+                if callable(_stop):
+                    _stop()
         wall_time_s = time.perf_counter() - t0
 
         tail_p99_ms, mean_energy_j, mean_memory_util, mean_reward = _aggregate_metrics(

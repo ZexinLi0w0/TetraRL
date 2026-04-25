@@ -628,3 +628,85 @@ def test_make_telemetry_mac_stub_with_real_tele_falls_back_with_warning():
         source, _adapter = _make_telemetry("mac_stub", use_real_telemetry=True)
     assert source.__class__.__name__ == "_MacStubTelemetry"
     assert len(record) >= 1
+
+
+def test_real_jetson_telemetry_warmup_waits_for_first_reading(monkeypatch):
+    """P9 fix: _RealJetsonTelemetry must wait for the first daemon reading
+    so the eval loop sees real memory_util, not the None-fallback 0.0."""
+    import tetrarl.eval.runner as runner_mod
+    import tetrarl.sys.tegra_daemon as daemon_mod
+    import shutil as _shutil
+
+    monkeypatch.setattr(_shutil, "which", lambda name, *a, **kw: "/fake/tegrastats" if name == "tegrastats" else None)
+
+    class _Reading:
+        ram_used_mb = 4096
+        ram_total_mb = 8192
+
+    class _SlowDaemon:
+        """Returns None for the first 3 latest() calls, then a real reading."""
+
+        def __init__(self, *a, **kw):
+            self._calls = 0
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        def latest(self):
+            self._calls += 1
+            if self._calls <= 3:
+                return None
+            return _Reading()
+
+    monkeypatch.setattr(daemon_mod, "TegrastatsDaemon", _SlowDaemon)
+
+    source, adapter = runner_mod._make_telemetry("orin_nano", use_real_telemetry=True)
+    # The wrapper should have polled long enough to see the real reading.
+    reading = source.latest()
+    hw = adapter(reading)
+    assert hw.memory_util is not None
+    assert abs(hw.memory_util - 0.5) < 1e-6
+
+
+def test_real_jetson_telemetry_warmup_timeout_warns(monkeypatch):
+    """P9 fix: if the daemon never produces a reading, the wrapper warns
+    rather than blocking forever."""
+    import tetrarl.eval.runner as runner_mod
+    import tetrarl.sys.tegra_daemon as daemon_mod
+    import shutil as _shutil
+
+    monkeypatch.setattr(_shutil, "which", lambda name, *a, **kw: "/fake/tegrastats" if name == "tegrastats" else None)
+
+    class _DeadDaemon:
+        def __init__(self, *a, **kw):
+            pass
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        def latest(self):
+            return None
+
+    monkeypatch.setattr(daemon_mod, "TegrastatsDaemon", _DeadDaemon)
+
+    # Patch the timeout to keep the test fast. The class likely has a constant
+    # like _WARMUP_TIMEOUT_S; if it doesn't, monkeypatch the time.sleep call
+    # in the runner module and have it advance a fake clock — whichever is
+    # cleanest. Easiest: temporarily monkeypatch the timeout class constant
+    # if you put it on the class.
+    monkeypatch.setattr(runner_mod._RealJetsonTelemetry, "_WARMUP_TIMEOUT_S", 0.05, raising=False)
+    monkeypatch.setattr(runner_mod._RealJetsonTelemetry, "_WARMUP_POLL_S", 0.01, raising=False)
+
+    import warnings
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        source, _adapter = runner_mod._make_telemetry("orin_nano", use_real_telemetry=True)
+    msgs = [str(r.message) for r in record if issubclass(r.category, RuntimeWarning)]
+    assert any("no reading" in m.lower() or "warmup" in m.lower() or "did not produce" in m.lower() for m in msgs), \
+        f"expected a warmup/no-reading RuntimeWarning, got: {msgs}"
