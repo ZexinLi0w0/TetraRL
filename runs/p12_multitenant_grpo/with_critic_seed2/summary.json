@@ -1,0 +1,72 @@
+{
+  "condition": "with_critic",
+  "seed": 2,
+  "n_steps": 200,
+  "model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+  "device": "cuda",
+  "dtype": "torch.bfloat16",
+  "host": "ubuntu",
+  "uname": "Linux ubuntu 5.15.148-tegra #1 SMP PREEMPT Tue Jan 7 17:14:38 PST 2025 aarch64 aarch64",
+  "torch_version": "2.8.0",
+  "cuda_available": true,
+  "tenants_enabled": {
+    "perception": true,
+    "llm_inf": true
+  },
+  "warmup_s": 12.0,
+  "n_tegrastats_samples": 2277,
+  "grpo": {
+    "n_steps_completed": 200,
+    "n_steps_target": 200,
+    "group_size": 2,
+    "gen_len": 12,
+    "elapsed_s": 235.393170081079,
+    "energy_gpu_j": 3902.4142907663595,
+    "energy_cpu_j": 672.8156996295006,
+    "energy_total_j": 4575.22999039586,
+    "energy_per_step_j": 22.8761499519793,
+    "mem_peak_ram_mb": 20266,
+    "torch_peak_alloc_mb": 10537.962890625,
+    "gpu_util_mean_pct": 71.81143975051462,
+    "step_total": {
+      "mean_ms": 1176.0025924444199,
+      "p50_ms": 1176.7591200768948,
+      "p99_ms": 1420.441488455981,
+      "max_ms": 3741.7345587164164
+    },
+    "step_generate": {
+      "mean_ms": 619.8581073340029,
+      "p50_ms": 673.4015354886651,
+      "p99_ms": 700.495324563235,
+      "max_ms": 1163.4403187781572
+    },
+    "step_forward": {
+      "mean_ms": 62.14151514694095,
+      "p50_ms": 61.5575360134244,
+      "p99_ms": 64.80818185955286,
+      "max_ms": 115.04668742418289
+    },
+    "step_backward": {
+      "mean_ms": 105.12395485304296,
+      "p50_ms": 102.16398350894451,
+      "p99_ms": 108.5802582092583,
+      "max_ms": 598.7446736544371
+    },
+    "step_optim": {
+      "mean_ms": 388.5740441456437,
+      "p50_ms": 332.37582352012396,
+      "p99_ms": 586.9759549200535,
+      "max_ms": 1850.9865906089544
+    },
+    "final_reward_mean": 0.3333333432674408,
+    "oom": false
+  },
+  "override": {
+    "fire_count": 1,
+    "fire_rate": 0.005,
+    "thresholds": {
+      "max_latency_ms": 2000.0,
+      "max_memory_util": 0.9
+    }
+  }
+}

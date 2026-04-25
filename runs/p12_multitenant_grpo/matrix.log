@@ -1,0 +1,15 @@
+[09:33:42] start matrix (pid=372969)
+[09:33:42] start  with_critic seed=0 -> /experiment/zexin/TetraRL/runs/p12_multitenant_grpo/with_critic_seed0
+[09:37:57] finish with_critic seed=0 rc=0
+[09:37:57] start  without_critic seed=0 -> /experiment/zexin/TetraRL/runs/p12_multitenant_grpo/without_critic_seed0
+[09:42:10] finish without_critic seed=0 rc=0
+[09:42:10] start  with_critic seed=1 -> /experiment/zexin/TetraRL/runs/p12_multitenant_grpo/with_critic_seed1
+[09:46:31] finish with_critic seed=1 rc=0
+[09:46:31] start  without_critic seed=1 -> /experiment/zexin/TetraRL/runs/p12_multitenant_grpo/without_critic_seed1
+[09:50:48] finish without_critic seed=1 rc=1
+[09:50:48] WARN: without_critic seed=1 exited rc=1, continuing
+[09:50:48] start  with_critic seed=2 -> /experiment/zexin/TetraRL/runs/p12_multitenant_grpo/with_critic_seed2
+[09:55:07] finish with_critic seed=2 rc=0
+[09:55:07] start  without_critic seed=2 -> /experiment/zexin/TetraRL/runs/p12_multitenant_grpo/without_critic_seed2
+[09:59:20] finish without_critic seed=2 rc=0
+[09:59:20] matrix complete
