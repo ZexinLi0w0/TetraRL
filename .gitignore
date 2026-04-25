@@ -67,6 +67,29 @@ runs/*
 !runs/w10_nano_matrix/**
 !runs/w11_nano_grpo_orin/
 !runs/w11_nano_grpo_orin/**
+# Whitelist P10 Phase 2 deliverables (component ablation + multi-seed + real RLHF)
+!runs/p10_orin_ablation/
+!runs/p10_orin_ablation/ablation_*.csv
+!runs/p10_orin_ablation/ablation_*.md
+!runs/p10_orin_ablation/ablation_*.tex
+!runs/p10_dst_multiseed_orin/
+!runs/p10_dst_multiseed_orin/dst_*.csv
+!runs/p10_dst_multiseed_orin/dst_*.md
+!runs/p10_dst_multiseed_orin/dst_*.tex
+!runs/p10_dst_multiseed_orin/multi_seed.log
+!runs/p10_nano_dag_multiseed/
+!runs/p10_nano_dag_multiseed/nano_dag_*.csv
+!runs/p10_nano_dag_multiseed/nano_dag_*.md
+!runs/p10_nano_dag_multiseed/nano_dag_*.tex
+!runs/p10_nano_dag_multiseed/multi_seed.log
+!runs/p10_nano_dag_multiseed/seed*/
+!runs/p10_nano_dag_multiseed/seed*/summary.csv
+!runs/p10_nano_grpo_real_rlhf_orin/
+!runs/p10_nano_grpo_real_rlhf_orin/summary.json
+!runs/p10_nano_grpo_real_rlhf_orin/per_step_*.csv
+!runs/p10_nano_grpo_real_rlhf_orin/response_curves.png
+!runs/p10_nano_grpo_real_rlhf_orin/response_curves.pdf
+!runs/p10_nano_grpo_real_rlhf_orin/response_curves.svg
 # Only whitelist the per-omega winner Markdown report; the JSONL eval
 # logs themselves stay ignored (regenerable from the matrix YAML).
 !runs/w10_orin_full_fixed/

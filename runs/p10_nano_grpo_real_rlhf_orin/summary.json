@@ -1,0 +1,108 @@
+{
+  "model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+  "n_steps": 200,
+  "group_size": 2,
+  "gen_len": 12,
+  "lr": 1e-07,
+  "seed": 0,
+  "device": "cuda",
+  "dtype": "torch.bfloat16",
+  "host": "ubuntu",
+  "uname": "Linux ubuntu 5.15.148-tegra #1 SMP PREEMPT Tue Jan 7 17:14:38 PST 2025 aarch64 aarch64",
+  "torch_version": "2.8.0",
+  "cuda_available": true,
+  "rlhf_source": "ultrafeedback",
+  "rlhf_n_prompts": 200,
+  "passes": {
+    "with_critic": {
+      "n_steps": 200,
+      "group_size": 2,
+      "gen_len": 12,
+      "elapsed_s": 216.7098088003695,
+      "energy_gpu_j": 3115.3039314496014,
+      "energy_cpu_j": 472.13324162156414,
+      "energy_total_j": 3587.4371730711655,
+      "energy_per_step_j": 17.93718586535583,
+      "mem_peak_ram_mb": 16207,
+      "torch_peak_alloc_mb": 10537.962890625,
+      "gpu_util_mean_pct": 49.269274737631015,
+      "n_tegrastats_samples": 2070,
+      "step_total": {
+        "mean_ms": 1083.1678508687764,
+        "p50_ms": 1132.391151972115,
+        "p99_ms": 1141.089621577412,
+        "max_ms": 3586.6992957890034
+      },
+      "step_generate": {
+        "mean_ms": 615.8188006002456,
+        "p50_ms": 675.7605746388435,
+        "p99_ms": 680.5158620886505,
+        "max_ms": 1191.8016951531172
+      },
+      "step_forward": {
+        "mean_ms": 62.05093360505998,
+        "p50_ms": 61.87422387301922,
+        "p99_ms": 62.91933322325349,
+        "max_ms": 98.38444739580154
+      },
+      "step_backward": {
+        "mean_ms": 105.98133916966617,
+        "p50_ms": 104.58107106387615,
+        "p99_ms": 107.16526674106714,
+        "max_ms": 356.58006370067596
+      },
+      "step_optim": {
+        "mean_ms": 298.9655377343297,
+        "p50_ms": 291.91100783646107,
+        "p99_ms": 293.02294122055173,
+        "max_ms": 1938.4156167507172
+      },
+      "final_reward_mean": 0.0
+    },
+    "without_critic": {
+      "n_steps": 200,
+      "group_size": 2,
+      "gen_len": 12,
+      "elapsed_s": 214.95555184036493,
+      "energy_gpu_j": 3090.5609219306216,
+      "energy_cpu_j": 488.0885825501448,
+      "energy_total_j": 3578.649504480766,
+      "energy_per_step_j": 17.89324752240383,
+      "mem_peak_ram_mb": 16191,
+      "torch_peak_alloc_mb": 10527.07861328125,
+      "gpu_util_mean_pct": 50.16431585755483,
+      "n_tegrastats_samples": 2056,
+      "step_total": {
+        "mean_ms": 1074.2048399150372,
+        "p50_ms": 1128.0611045658588,
+        "p99_ms": 1138.8868440315127,
+        "max_ms": 1872.6728949695826
+      },
+      "step_generate": {
+        "mean_ms": 613.5383488703519,
+        "p50_ms": 671.7767203226686,
+        "p99_ms": 677.4130178429186,
+        "max_ms": 686.2121280282736
+      },
+      "step_forward": {
+        "mean_ms": 61.50318302214146,
+        "p50_ms": 61.49307172745466,
+        "p99_ms": 62.1917693130672,
+        "max_ms": 62.45027109980583
+      },
+      "step_backward": {
+        "mean_ms": 103.59028178267181,
+        "p50_ms": 103.4976476803422,
+        "p99_ms": 105.11139616370201,
+        "max_ms": 105.22307083010674
+      },
+      "step_optim": {
+        "mean_ms": 295.23642532527447,
+        "p50_ms": 292.01147239655256,
+        "p99_ms": 294.0499093197286,
+        "max_ms": 1030.5069759488106
+      },
+      "final_reward_mean": 0.10000000149011612
+    }
+  }
+}
