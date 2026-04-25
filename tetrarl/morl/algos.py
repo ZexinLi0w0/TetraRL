@@ -135,12 +135,12 @@ class DQNAlgo:
     def update(self) -> dict[str, float]:
         if len(self.buffer) < self.train_after:
             return {}
-        s, a, r, sn, d = self.buffer.sample(self.batch_size)
-        s = torch.as_tensor(s.reshape(s.shape[0], -1), dtype=torch.float32, device=self.device)
-        sn = torch.as_tensor(sn.reshape(sn.shape[0], -1), dtype=torch.float32, device=self.device)
-        a = torch.as_tensor(a, dtype=torch.long, device=self.device)
-        r = torch.as_tensor(r, dtype=torch.float32, device=self.device)
-        d = torch.as_tensor(d, dtype=torch.float32, device=self.device)
+        s_np, a_np, r_np, sn_np, d_np = self.buffer.sample(self.batch_size)
+        s = torch.as_tensor(s_np.reshape(s_np.shape[0], -1), dtype=torch.float32, device=self.device)
+        sn = torch.as_tensor(sn_np.reshape(sn_np.shape[0], -1), dtype=torch.float32, device=self.device)
+        a = torch.as_tensor(a_np, dtype=torch.long, device=self.device)
+        r = torch.as_tensor(r_np, dtype=torch.float32, device=self.device)
+        d = torch.as_tensor(d_np, dtype=torch.float32, device=self.device)
         loss = self._td_loss(s, a, r, sn, d)
         self.opt.zero_grad()
         loss.backward()
@@ -246,13 +246,13 @@ class C51Algo:
     def update(self) -> dict[str, float]:
         if len(self.buffer) < self.train_after:
             return {}
-        s, a, r, sn, d = self.buffer.sample(self.batch_size)
-        B = s.shape[0]
-        s = torch.as_tensor(s.reshape(B, -1), dtype=torch.float32, device=self.device)
-        sn = torch.as_tensor(sn.reshape(B, -1), dtype=torch.float32, device=self.device)
-        a = torch.as_tensor(a, dtype=torch.long, device=self.device)
-        r = torch.as_tensor(r, dtype=torch.float32, device=self.device)
-        d = torch.as_tensor(d, dtype=torch.float32, device=self.device)
+        s_np, a_np, r_np, sn_np, d_np = self.buffer.sample(self.batch_size)
+        B = s_np.shape[0]
+        s = torch.as_tensor(s_np.reshape(B, -1), dtype=torch.float32, device=self.device)
+        sn = torch.as_tensor(sn_np.reshape(B, -1), dtype=torch.float32, device=self.device)
+        a = torch.as_tensor(a_np, dtype=torch.long, device=self.device)
+        r = torch.as_tensor(r_np, dtype=torch.float32, device=self.device)
+        d = torch.as_tensor(d_np, dtype=torch.float32, device=self.device)
 
         with torch.no_grad():
             dist_next = self._dist_target(sn)  # (B, A, atoms)
