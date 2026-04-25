@@ -8,7 +8,6 @@ runner registry imports. CPU-only; must pass on macOS.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from tetrarl.morl.agents.pd_morl import Transition
 from tetrarl.morl.baselines.duojoule import DuoJouleAgent, DuoJouleArbiter
