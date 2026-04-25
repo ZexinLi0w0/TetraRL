@@ -24,6 +24,7 @@ import argparse
 import csv
 import json
 import random
+import shutil
 import sys
 import time
 import warnings
@@ -71,6 +72,12 @@ class EvalConfig:
     # legacy single-env path byte-for-byte identical; n_envs > 1 routes
     # through the vector branch in EvalRunner.run().
     n_envs: int = 1
+    # P9: opt in to TegrastatsDaemon-backed telemetry on Jetson. False
+    # (default) preserves the legacy stub path; True wires a real
+    # tegrastats daemon and reports real RAM. Falls back to the Mac
+    # stub with a RuntimeWarning if tegrastats is not on PATH or the
+    # daemon fails to start.
+    use_real_telemetry: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -83,6 +90,7 @@ class EvalConfig:
             "out_dir": str(self.out_dir),
             "extra": dict(self.extra),
             "n_envs": int(self.n_envs),
+            "use_real_telemetry": bool(self.use_real_telemetry),
         }
 
     @classmethod
@@ -97,6 +105,7 @@ class EvalConfig:
             out_dir=Path(d["out_dir"]),
             extra=dict(d.get("extra") or {}),
             n_envs=int(d.get("n_envs", 1)),
+            use_real_telemetry=bool(d.get("use_real_telemetry", False)),
         )
 
     def to_yaml(self, path: Path) -> None:
@@ -353,36 +362,143 @@ def _make_override_layer(ablation: str, fallback_action: int = 0):
     )
 
 
-def _make_telemetry(platform: str) -> tuple[Any, Callable[[Any], HardwareTelemetry]]:
+class _RealJetsonTelemetry:
+    """Real-hardware telemetry wrapper around :class:`TegrastatsDaemon`.
+
+    Mirrors the eval-loop ``update(latency_ms, energy_remaining_j,
+    memory_util)`` contract used by ``_MacStubTelemetry``: latency and
+    energy_remaining are stored from the eval loop's per-step calls
+    (the daemon does not measure framework latency, and the eval loop
+    already tracks the synthetic action-aware energy coupling). The
+    ``memory_util`` argument is ignored because real RAM usage is
+    sampled by tegrastats.
+
+    ``latest()`` returns a :class:`_StubReading`-shaped object so the
+    existing ``_telemetry_to_hw`` adapter can be reused without a
+    second adapter function.
+    """
+
+    def __init__(self, daemon: Any, initial_energy_j: float = 1000.0):
+        self._daemon = daemon
+        self._latency = 0.0
+        self._energy = float(initial_energy_j)
+
+    def update(
+        self,
+        latency_ms: float,
+        energy_remaining_j: float,
+        memory_util: Optional[float] = None,
+    ) -> None:
+        self._latency = float(latency_ms)
+        self._energy = float(energy_remaining_j)
+        # memory_util ignored: real RAM comes from tegrastats.
+
+    def latest(self) -> _StubReading:
+        r = self._daemon.latest()
+        if r is None:
+            # Daemon hasn't produced a reading yet. Default memory_util
+            # to 0.0 so the override layer treats this as "no data,
+            # do not fire" (matches the stub default contract).
+            mem_util: Optional[float] = 0.0
+        else:
+            ram_used = int(getattr(r, "ram_used_mb", 0))
+            ram_total = int(getattr(r, "ram_total_mb", 1))
+            mem_util = ram_used / max(1, ram_total)
+        return _StubReading(
+            latency_ema_ms=self._latency,
+            energy_remaining_j=self._energy,
+            memory_util=mem_util,
+        )
+
+    def stop(self) -> None:
+        try:
+            self._daemon.stop()
+        except Exception:
+            pass
+
+
+def _make_telemetry(
+    platform: str,
+    use_real_telemetry: bool = False,
+) -> tuple[Any, Callable[[Any], HardwareTelemetry]]:
     """Return ``(telemetry_source, telemetry_adapter)`` for the platform.
 
-    Only the Mac stub path is exercised by the unit tests; Jetson
-    builds out a real :class:`TegrastatsDaemon`-backed source in the
-    physical eval scripts.
+    By default (``use_real_telemetry=False``) this returns the Mac stub
+    for every platform — keeping the legacy W9 behaviour where Orin
+    runs that did not opt in to real telemetry would silently fall back
+    to the stub (with a :class:`RuntimeWarning`).
 
-    Note: when ``platform`` starts with ``"orin_"`` we still return the
-    Mac stub here (the real tegrastats daemon lives in the
-    platform-specific scripts under ``scripts/`` because it requires the
-    ``tegrastats`` binary present only on Jetson). A
-    :class:`RuntimeWarning` is emitted so the eval harness does not
-    silently lie about its telemetry source — this closes the W8 hidden
-    bug where Orin runs were quietly using synthetic data.
+    When ``use_real_telemetry=True`` AND ``platform`` starts with
+    ``"orin_"``, this builds a :class:`TegrastatsDaemon` and wraps it
+    in :class:`_RealJetsonTelemetry`. If the ``tegrastats`` binary is
+    not on PATH, or if daemon construction / start raises, this falls
+    back to the Mac stub with a :class:`RuntimeWarning` rather than
+    crashing — so the same opt-in flag is safe to set on both Jetson
+    and developer Macs.
     """
-    if platform.startswith("orin_"):
+    is_orin = platform.startswith("orin_")
+
+    # Legacy back-compat path: --use-real-telemetry not set.
+    if not use_real_telemetry:
+        if is_orin:
+            warnings.warn(
+                f"_make_telemetry() called with platform={platform!r} but the "
+                "real tegrastats daemon is not wired up here; falling back to "
+                "the Mac stub. Real-Orin runs should use the platform-specific "
+                "scripts that build a TegrastatsDaemon directly.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        # Both mac_stub and unrecognised platforms get the silent Mac stub.
+        return _MacStubTelemetry(initial_energy_j=1000.0), _telemetry_to_hw
+
+    # use_real_telemetry=True: only meaningful on Jetson platforms.
+    if not is_orin:
         warnings.warn(
-            f"_make_telemetry() called with platform={platform!r} but the "
-            "real tegrastats daemon is not wired up here; falling back to "
-            "the Mac stub. Real-Orin runs should use the platform-specific "
-            "scripts that build a TegrastatsDaemon directly.",
+            f"_make_telemetry(use_real_telemetry=True) called with "
+            f"platform={platform!r}; real telemetry only makes sense on a "
+            "Jetson (orin_agx / orin_nano). Falling back to the Mac stub.",
             RuntimeWarning,
             stacklevel=2,
         )
-    if platform == "mac_stub":
         return _MacStubTelemetry(initial_energy_j=1000.0), _telemetry_to_hw
-    # Default to the stub for any unrecognised platform — the physical
-    # platforms live behind sudo / sysfs and are wired up by the
-    # platform-specific scripts, not by the unit-test path.
-    return _MacStubTelemetry(initial_energy_j=1000.0), _telemetry_to_hw
+
+    # Orin + opt-in. First, fail fast if the binary isn't on PATH so we
+    # don't silently hand back a "noop" daemon that never produces a
+    # reading.
+    if shutil.which("tegrastats") is None:
+        warnings.warn(
+            "--use-real-telemetry requested but tegrastats binary not found "
+            "in PATH; falling back to Mac stub. To use real telemetry, run "
+            "on a Jetson with tegrastats installed.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return _MacStubTelemetry(initial_energy_j=1000.0), _telemetry_to_hw
+
+    # Construct + start the daemon. Any failure -> graceful Mac-stub fallback.
+    try:
+        from tetrarl.sys.tegra_daemon import TegrastatsDaemon  # lazy import
+        daemon = TegrastatsDaemon(platform=platform, source="auto")
+        daemon.start()
+    except (ImportError, OSError, RuntimeError, FileNotFoundError) as exc:
+        warnings.warn(
+            f"--use-real-telemetry requested but TegrastatsDaemon wiring "
+            f"failed ({type(exc).__name__}: {exc}); falling back to Mac stub.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return _MacStubTelemetry(initial_energy_j=1000.0), _telemetry_to_hw
+    except Exception as exc:  # pragma: no cover - defensive catch-all
+        warnings.warn(
+            f"--use-real-telemetry requested but TegrastatsDaemon wiring "
+            f"failed ({type(exc).__name__}: {exc}); falling back to Mac stub.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return _MacStubTelemetry(initial_energy_j=1000.0), _telemetry_to_hw
+
+    return _RealJetsonTelemetry(daemon, initial_energy_j=1000.0), _telemetry_to_hw
 
 
 # -----------------------------------------------------------------------------
@@ -440,7 +556,9 @@ class EvalRunner:
         rm = _make_resource_manager(cfg.ablation)
         arbiter = _make_rl_arbiter(cfg.agent_type, cfg.ablation, n_actions, cfg.seed)
         override = _make_override_layer(cfg.ablation, fallback_action=0)
-        telemetry_source, telemetry_adapter = _make_telemetry(cfg.platform)
+        telemetry_source, telemetry_adapter = _make_telemetry(
+            cfg.platform, use_real_telemetry=bool(cfg.use_real_telemetry)
+        )
         # Mac stub path: no DVFSController (writes would target unsupported
         # sysfs nodes). Jetson path will inject one in a separate runner.
         return TetraRLFramework(
@@ -498,7 +616,11 @@ class EvalRunner:
 
         framework = self._build_framework(cfg, n_actions=n_actions)
         # Hand the real telemetry stub back so we can update() it per step.
-        telemetry: _MacStubTelemetry = framework.telemetry_source
+        telemetry: Any = framework.telemetry_source
+        # P9: when use_real_telemetry=True, the loop reads memory_util from
+        # the daemon-backed wrapper instead of computing the synthetic
+        # action-aware ramp.
+        use_real_tele = bool(cfg.use_real_telemetry)
 
         out_dir = Path(cfg.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -532,26 +654,42 @@ class EvalRunner:
                     last_action = 0
                     done = False
                     while not done:
-                        # Memory pressure built from step t-1's executed
-                        # action (so the override layer at step t can react).
-                        # Coefficient 0.005 (not 0.0005) is needed for the
-                        # synthetic ramp to cross max_memory_util=0.13 within
-                        # the short CartPole-v1 episode lengths exercised by
-                        # the W10 override-telemetry tests.
-                        action_norm = float(last_action) / float(max(1, n_actions - 1))
-                        memory_util = 0.08 + 0.005 * episode_step + 0.04 * action_norm
+                        if use_real_tele:
+                            # Real-telemetry path: memory_util comes from the
+                            # daemon, not from the synthetic action-aware
+                            # formula. We still push latency / energy_remaining
+                            # so the wrapper's stored values stay fresh.
+                            telemetry.update(
+                                latency_ms=latencies[-1] if latencies else 0.0,
+                                energy_remaining_j=energy_remaining,
+                                memory_util=0.0,  # ignored by real wrapper
+                            )
+                        else:
+                            # Memory pressure built from step t-1's executed
+                            # action (so the override layer at step t can react).
+                            # Coefficient 0.005 (not 0.0005) is needed for the
+                            # synthetic ramp to cross max_memory_util=0.13
+                            # within the short CartPole-v1 episode lengths
+                            # exercised by the W10 override-telemetry tests.
+                            action_norm = float(last_action) / float(
+                                max(1, n_actions - 1)
+                            )
+                            memory_util = (
+                                0.08 + 0.005 * episode_step + 0.04 * action_norm
+                            )
 
-                        # Push the action-aware memory_util into telemetry
-                        # BEFORE framework.step so the override layer at step
-                        # t actually reads the pressure built from step t-1's
-                        # executed action. (Latency / energy_remaining are
-                        # latched post-step below; the override only triggers
-                        # on memory in the W10 fix path.)
-                        telemetry.update(
-                            latency_ms=latencies[-1] if latencies else 0.0,
-                            energy_remaining_j=energy_remaining,
-                            memory_util=memory_util,
-                        )
+                            # Push the action-aware memory_util into telemetry
+                            # BEFORE framework.step so the override layer at
+                            # step t actually reads the pressure built from
+                            # step t-1's executed action. (Latency /
+                            # energy_remaining are latched post-step below;
+                            # the override only triggers on memory in the W10
+                            # fix path.)
+                            telemetry.update(
+                                latency_ms=latencies[-1] if latencies else 0.0,
+                                energy_remaining_j=energy_remaining,
+                                memory_util=memory_util,
+                            )
 
                         t_fw0 = time.perf_counter()
                         record = framework.step(obs)
@@ -568,6 +706,15 @@ class EvalRunner:
                         latency_ms = env_dt_ms + fw_dt_ms
                         energy_j = 1e-3 * (action + 1)
                         energy_remaining = max(0.0, energy_remaining - energy_j)
+
+                        if use_real_tele:
+                            # Pull a fresh real reading post-step for the
+                            # JSONL record + summary aggregation. The override
+                            # layer already saw whatever the daemon had at the
+                            # pre-step update() call above.
+                            real_reading = telemetry.latest()
+                            real_mem = getattr(real_reading, "memory_util", None)
+                            memory_util = float(real_mem) if real_mem is not None else 0.0
 
                         record["latency_ms"] = float(latency_ms)
                         record["energy_j"] = float(energy_j)
@@ -674,7 +821,10 @@ class EvalRunner:
             n_actions = 2
 
         framework = self._build_framework(cfg, n_actions=n_actions)
-        telemetry: _MacStubTelemetry = framework.telemetry_source
+        telemetry: Any = framework.telemetry_source
+        # P9: when use_real_telemetry=True, memory_util comes from the
+        # daemon-backed wrapper instead of the synthetic action-aware ramp.
+        use_real_tele = bool(cfg.use_real_telemetry)
 
         out_dir = Path(cfg.out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -714,20 +864,31 @@ class EvalRunner:
 
                     # Per-env framework.step (one action per env per rollout step).
                     for i in range(n_envs):
-                        action_norm_i = float(per_env_last_action[i]) / float(
-                            max(1, n_actions - 1)
-                        )
-                        memory_util_i = (
-                            0.08 + 0.005 * per_env_step[i] + 0.04 * action_norm_i
-                        )
-                        # Update telemetry to mirror the single-env contract
-                        # (the framework.step reads telemetry latched from
-                        # the previous env-i step).
-                        telemetry.update(
-                            latency_ms=latencies[-1] if latencies else 0.0,
-                            energy_remaining_j=energy_remaining,
-                            memory_util=memory_util_i,
-                        )
+                        if use_real_tele:
+                            # Real-telemetry path: memory_util comes from the
+                            # daemon wrapper, not the synthetic ramp. Push
+                            # latency / energy_remaining so the wrapper stays
+                            # fresh; the memory_util arg is ignored.
+                            telemetry.update(
+                                latency_ms=latencies[-1] if latencies else 0.0,
+                                energy_remaining_j=energy_remaining,
+                                memory_util=0.0,
+                            )
+                        else:
+                            action_norm_i = float(per_env_last_action[i]) / float(
+                                max(1, n_actions - 1)
+                            )
+                            memory_util_i = (
+                                0.08 + 0.005 * per_env_step[i] + 0.04 * action_norm_i
+                            )
+                            # Update telemetry to mirror the single-env contract
+                            # (the framework.step reads telemetry latched from
+                            # the previous env-i step).
+                            telemetry.update(
+                                latency_ms=latencies[-1] if latencies else 0.0,
+                                energy_remaining_j=energy_remaining,
+                                memory_util=memory_util_i,
+                            )
 
                         t_fw0 = time.perf_counter()
                         record = framework.step(obs[i])
@@ -760,15 +921,26 @@ class EvalRunner:
                                 per_env_step[i] += 1
                             continue
 
-                        # Recompute the same memory_util_i used for telemetry
-                        # above so the JSONL record matches what the override
-                        # layer actually saw.
-                        action_norm_i = float(per_env_last_action[i]) / float(
-                            max(1, n_actions - 1)
-                        )
-                        memory_util_i = (
-                            0.08 + 0.005 * per_env_step[i] + 0.04 * action_norm_i
-                        )
+                        if use_real_tele:
+                            # Pull a fresh real reading post-step. All envs in
+                            # the same rollout step share the same daemon
+                            # snapshot — the SyncVectorEnv stepped them
+                            # sequentially, so per-env memory_util sampling at
+                            # this granularity is the best we can do without
+                            # a per-env daemon.
+                            real_reading = telemetry.latest()
+                            real_mem = getattr(real_reading, "memory_util", None)
+                            memory_util_i = float(real_mem) if real_mem is not None else 0.0
+                        else:
+                            # Recompute the same memory_util_i used for
+                            # telemetry above so the JSONL record matches what
+                            # the override layer actually saw.
+                            action_norm_i = float(per_env_last_action[i]) / float(
+                                max(1, n_actions - 1)
+                            )
+                            memory_util_i = (
+                                0.08 + 0.005 * per_env_step[i] + 0.04 * action_norm_i
+                            )
                         action_i = int(actions[i])
                         reward_i = float(vec_rewards[i])
                         latency_ms_i = env_dt_ms_per + fw_dts_ms[i]
@@ -908,6 +1080,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         default=None,
         help="Override out_dir for all configs",
     )
+    parser.add_argument(
+        "--use-real-telemetry",
+        action="store_true",
+        help=(
+            "On Jetson (orin_agx / orin_nano), build a real "
+            "TegrastatsDaemon-backed telemetry source instead of the Mac "
+            "stub. Falls back to the Mac stub with a RuntimeWarning if "
+            "tegrastats is unavailable."
+        ),
+    )
     args = parser.parse_args(argv)
     if args.config is None:
         parser.print_help()
@@ -916,6 +1098,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.out_dir:
         for c in configs:
             c.out_dir = Path(args.out_dir)
+    if args.use_real_telemetry:
+        for c in configs:
+            c.use_real_telemetry = True
     runner = EvalRunner()
     results = runner.run_sweep(configs)
     print(f"Completed {len(results)} runs")

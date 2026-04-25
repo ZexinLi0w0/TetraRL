@@ -500,3 +500,131 @@ def test_run_with_n_envs_2_seed_reproducibility(tmp_path):
     assert pa[1] == pb[1]
     assert len(pa[0]) > 0
     assert len(pa[1]) > 0
+
+
+# -----------------------------------------------------------------------------
+# P9: --use-real-telemetry / TegrastatsDaemon wiring
+# -----------------------------------------------------------------------------
+
+
+def test_eval_config_default_use_real_telemetry_is_false():
+    """P9: use_real_telemetry defaults to False for backward compatibility."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="mac_stub",
+        n_episodes=1,
+        seed=0,
+        out_dir=Path("runs/eval"),
+    )
+    assert cfg.use_real_telemetry is False
+
+
+def test_eval_config_round_trip_dict_preserves_use_real_telemetry():
+    """P9: dict round-trip preserves use_real_telemetry=True."""
+    cfg = EvalConfig(
+        env_name="CartPole-v1",
+        agent_type="random",
+        ablation="none",
+        platform="orin_nano",
+        n_episodes=1,
+        seed=0,
+        out_dir=Path("runs/eval"),
+        use_real_telemetry=True,
+    )
+    d = cfg.to_dict()
+    assert d["use_real_telemetry"] is True
+    cfg2 = EvalConfig.from_dict(d)
+    assert cfg2.use_real_telemetry is True
+
+
+def test_make_telemetry_orin_with_real_tele_no_tegrastats_falls_back_with_warning(monkeypatch):
+    """P9: --use-real-telemetry on a host without tegrastats binary should
+    fall back to Mac stub with a RuntimeWarning rather than crash."""
+    import tetrarl.eval.runner as runner_mod
+
+    # Force shutil.which to return None for "tegrastats" so we simulate Mac.
+    import shutil as _shutil
+    real_which = _shutil.which
+
+    def fake_which(name, *a, **kw):
+        if name == "tegrastats":
+            return None
+        return real_which(name, *a, **kw)
+
+    monkeypatch.setattr(_shutil, "which", fake_which)
+
+    with pytest.warns(RuntimeWarning) as record:
+        source, adapter = runner_mod._make_telemetry("orin_nano", use_real_telemetry=True)
+    assert any("tegrastats" in str(r.message).lower() for r in record)
+    assert source.__class__.__name__ == "_MacStubTelemetry"
+
+
+def test_make_telemetry_orin_with_real_tele_uses_real_when_daemon_starts(monkeypatch):
+    """P9: when TegrastatsDaemon import + start succeed, _make_telemetry
+    must return the real wrapper (not the Mac stub). Uses a fake daemon
+    so the test runs on Mac without a real tegrastats binary."""
+    import tetrarl.eval.runner as runner_mod
+    import tetrarl.sys.tegra_daemon as daemon_mod
+
+    # Pretend tegrastats is on PATH so the binary check passes.
+    import shutil as _shutil
+
+    def fake_which(name, *a, **kw):
+        if name == "tegrastats":
+            return "/fake/tegrastats"
+        return _shutil.which(name, *a, **kw)
+
+    monkeypatch.setattr(_shutil, "which", fake_which)
+
+    started = {"v": False}
+
+    class _FakeReading:
+        ram_used_mb = 4096
+        ram_total_mb = 8192
+
+    class _FakeDaemon:
+        def __init__(self, *a, **kw):
+            pass
+
+        def start(self):
+            started["v"] = True
+
+        def stop(self):
+            pass
+
+        def latest(self):
+            return _FakeReading()
+
+    monkeypatch.setattr(daemon_mod, "TegrastatsDaemon", _FakeDaemon)
+
+    source, adapter = runner_mod._make_telemetry("orin_nano", use_real_telemetry=True)
+    assert source.__class__.__name__ != "_MacStubTelemetry", \
+        f"expected real wrapper, got {source.__class__.__name__}"
+    assert started["v"] is True
+
+    # The adapter should produce a HardwareTelemetry with memory_util ~ 0.5.
+    source.update(latency_ms=1.0, energy_remaining_j=999.0, memory_util=0.0)
+    reading = source.latest()
+    hw = adapter(reading)
+    assert hw.memory_util is not None
+    assert abs(hw.memory_util - 0.5) < 1e-6
+
+
+def test_make_telemetry_legacy_no_flag_still_warns_and_stubs():
+    """P9 back-compat: existing W9 behaviour preserved when
+    use_real_telemetry is not passed."""
+    with pytest.warns(RuntimeWarning) as record:
+        source, _adapter = _make_telemetry("orin_nano")
+    assert source.__class__.__name__ == "_MacStubTelemetry"
+    assert any("orin" in str(r.message).lower() for r in record)
+
+
+def test_make_telemetry_mac_stub_with_real_tele_falls_back_with_warning():
+    """P9: --use-real-telemetry on platform=mac_stub is nonsensical;
+    must fall back to stub with a RuntimeWarning."""
+    with pytest.warns(RuntimeWarning) as record:
+        source, _adapter = _make_telemetry("mac_stub", use_real_telemetry=True)
+    assert source.__class__.__name__ == "_MacStubTelemetry"
+    assert len(record) >= 1
