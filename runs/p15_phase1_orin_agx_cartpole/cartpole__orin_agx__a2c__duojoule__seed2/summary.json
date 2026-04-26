@@ -1,0 +1,11 @@
+{
+  "algo": "a2c",
+  "env": "cartpole",
+  "frames": 50000,
+  "platform": "orin_agx",
+  "reason": "wrapper duojoule incompatible with a2c",
+  "seed": 2,
+  "status": "SKIPPED",
+  "wall_time_s": 0.0,
+  "wrapper": "duojoule"
+}

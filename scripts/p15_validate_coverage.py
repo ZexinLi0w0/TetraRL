@@ -30,10 +30,27 @@ REQUIRED_COMPLETED_FIELDS: dict[str, type | tuple[type, ...]] = {
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="P15 matrix coverage validator")
-    p.add_argument("--matrix", required=True, help="path to p15_drl_matrix.yaml")
-    p.add_argument("--runs-root", required=True, help="directory containing per-cell run dirs")
+    p.add_argument("--matrix", help="path to p15_drl_matrix.yaml (full mode)")
+    p.add_argument("--runs-root", help="directory containing per-cell run dirs (full mode)")
+    p.add_argument(
+        "--runs-dir",
+        help="directory containing per-cell run dirs (lightweight mode; alias for --runs-root)",
+    )
+    p.add_argument(
+        "--expected-cells",
+        type=int,
+        help=(
+            "lightweight mode: total expected COMPLETED summary.json files under "
+            "--runs-dir (SKIPPED files are checked but counted separately)"
+        ),
+    )
     p.add_argument("--strict", action="store_true", help="fail on any missing required field")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.runs_dir and not args.runs_root:
+        args.runs_root = args.runs_dir
+    if not args.matrix and not (args.runs_root and args.expected_cells is not None):
+        p.error("must provide either --matrix and --runs-root, OR --runs-dir and --expected-cells")
+    return args
 
 
 def _cell_dir_name(run: dict[str, Any]) -> str:
@@ -94,9 +111,13 @@ def _check_skipped(summary: dict[str, Any]) -> list[str]:
 
 def main() -> int:
     args = _parse_args()
-    matrix_path = Path(args.matrix).expanduser().resolve()
     runs_root = Path(args.runs_root).expanduser().resolve()
 
+    # Lightweight mode: discover summary.json files directly under runs_root.
+    if args.matrix is None:
+        return _main_lightweight(runs_root, int(args.expected_cells), args.strict)
+
+    matrix_path = Path(args.matrix).expanduser().resolve()
     with matrix_path.open() as f:
         doc = yaml.safe_load(f)
     runs: list[dict[str, Any]] = doc.get("runs", [])
@@ -144,7 +165,70 @@ def main() -> int:
     ok = n_missing == 0 and n_mismatched == 0
     if not ok:
         print("FAILED")
-        # Cap printed failures to keep the report readable.
+        for line in failures[:50]:
+            print("  -", line)
+        if len(failures) > 50:
+            print(f"  ... and {len(failures) - 50} more")
+        return 1
+    print("ALL OK")
+    return 0
+
+
+def _main_lightweight(runs_root: Path, expected_completed: int, strict: bool) -> int:
+    """Lightweight mode: count summary.json files under runs_root, classify by status."""
+    if not runs_root.exists():
+        print(f"[P15-VALIDATE] runs_root={runs_root}")
+        print(f"FAILED: runs_root does not exist")
+        return 1
+    cells = sorted(
+        d for d in runs_root.iterdir()
+        if d.is_dir() and not d.name.startswith("_")
+    )
+    n_completed = 0
+    n_skipped = 0
+    n_other = 0
+    failures: list[str] = []
+    for cell in cells:
+        sp = cell / "summary.json"
+        if not sp.exists():
+            failures.append(f"MISSING {cell.name}: summary.json not found")
+            continue
+        try:
+            with sp.open() as f:
+                summary = json.load(f)
+        except Exception as exc:
+            failures.append(f"MISMATCH {cell.name}: failed to parse JSON ({exc!r})")
+            continue
+        status = summary.get("status")
+        if status == "COMPLETED":
+            errs = _check_completed(summary, strict)
+            if errs:
+                failures.append(f"MISMATCH {cell.name}: " + "; ".join(errs))
+            else:
+                n_completed += 1
+        elif status in {"SKIPPED", "DEFERRED"}:
+            errs = _check_skipped(summary)
+            if errs:
+                failures.append(f"MISMATCH {cell.name}: " + "; ".join(errs))
+            else:
+                n_skipped += 1
+        else:
+            n_other += 1
+            failures.append(f"MISMATCH {cell.name}: unknown status={status!r}")
+
+    print(f"[P15-VALIDATE-LIGHT] runs_root={runs_root}")
+    print(f"expected COMPLETED: {expected_completed}")
+    print(
+        f"found: COMPLETED={n_completed}  SKIPPED/DEFERRED={n_skipped}  other={n_other}  "
+        f"total cells={len(cells)}"
+    )
+    ok = (n_completed == expected_completed) and not failures
+    if not ok:
+        print("FAILED")
+        if n_completed != expected_completed:
+            print(
+                f"  - expected {expected_completed} COMPLETED cells, found {n_completed}"
+            )
         for line in failures[:50]:
             print("  -", line)
         if len(failures) > 50:
