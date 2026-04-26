@@ -135,6 +135,16 @@ runs/p15_phase1_orin_agx_cartpole/*/*
 !runs/p15_phase1_orin_agx_cartpole/*/summary.json
 !runs/p15_phase1_orin_agx_cartpole/_phase1_summary.csv
 !runs/p15_phase1_orin_agx_cartpole/_phase1_summary.md
+
+# P15 Phase 2 results (CartPole × Orin Nano, 75 cells = 63 COMPLETED + 12 SKIPPED).
+# Whitelist only summary.json (per_step.jsonl files kept on Nano only).
+!runs/p15_phase2_orin_nano_cartpole/
+runs/p15_phase2_orin_nano_cartpole/*
+!runs/p15_phase2_orin_nano_cartpole/*/
+runs/p15_phase2_orin_nano_cartpole/*/*
+!runs/p15_phase2_orin_nano_cartpole/*/summary.json
+!runs/p15_phase2_orin_nano_cartpole/_phase2_summary.csv
+!runs/p15_phase2_orin_nano_cartpole/_phase2_summary.md
 # Only whitelist the per-omega winner Markdown report; the JSONL eval
 # logs themselves stay ignored (regenerable from the matrix YAML).
 !runs/w10_orin_full_fixed/
