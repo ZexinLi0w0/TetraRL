@@ -54,7 +54,7 @@ class NatureCNN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.float() / 255.0
-        return self.fc(self.conv(x))
+        return self.fc(self.conv(x))  # type: ignore[no-any-return]
 
 
 class _CNNQNet(nn.Module):
@@ -66,7 +66,7 @@ class _CNNQNet(nn.Module):
         self.head = nn.Linear(feature_dim, out_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.head(self.trunk(x))
+        return self.head(self.trunk(x))  # type: ignore[no-any-return]
 
 
 def _build_qnet(obs_shape: tuple[int, ...], out_dim: int) -> nn.Module:
@@ -84,7 +84,7 @@ class ReplayBuffer:
         self,
         capacity: int,
         obs_shape: tuple[int, ...],
-        obs_dtype: np.dtype = np.float32,
+        obs_dtype: Any = np.float32,
     ) -> None:
         self.capacity = int(capacity)
         self.obs_shape = obs_shape
@@ -401,7 +401,7 @@ class _RolloutBuffer:
         self,
         rollout_steps: int,
         obs_shape: tuple[int, ...],
-        obs_dtype: np.dtype = np.float32,
+        obs_dtype: Any = np.float32,
     ) -> None:
         self.cap = int(rollout_steps)
         self.obs_dtype = obs_dtype

@@ -16,7 +16,6 @@ from tetrarl.morl.algos import (
     ReplayBuffer,
 )
 
-
 # --- NatureCNN encoder ----------------------------------------------------
 
 

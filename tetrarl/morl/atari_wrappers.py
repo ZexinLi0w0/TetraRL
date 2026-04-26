@@ -12,9 +12,8 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-import numpy as np
-
 import gymnasium as gym
+import numpy as np
 from gymnasium import spaces
 
 # --- optional resize backends ---------------------------------------------
@@ -54,7 +53,7 @@ def _to_grayscale_84(frame: np.ndarray) -> np.ndarray:
         out = cv2.resize(gray, (84, 84), interpolation=cv2.INTER_AREA)
     elif _HAS_PIL:
         img = Image.fromarray(gray)
-        out = np.asarray(img.resize((84, 84), Image.BILINEAR), dtype=np.uint8)
+        out = np.asarray(img.resize((84, 84), Image.BILINEAR), dtype=np.uint8)  # type: ignore[attr-defined]
     else:
         # Last-resort nearest-neighbour resize via numpy indexing.
         h, w = gray.shape[:2]
@@ -74,7 +73,7 @@ class NoopResetEnv(gym.Wrapper):
         super().__init__(env)
         self.noop_max = int(noop_max)
         self.noop_action = 0
-        meanings = getattr(env.unwrapped, "get_action_meanings", lambda: [])()
+        meanings: list[str] = getattr(env.unwrapped, "get_action_meanings", lambda: [])()
         if meanings:
             assert meanings[0] == "NOOP", f"expected NOOP at action 0, got {meanings[:1]}"
 
@@ -100,7 +99,7 @@ class MaxAndSkipEnv(gym.Wrapper):
         self.skip = int(skip)
         shape = env.observation_space.shape
         dtype = env.observation_space.dtype or np.uint8
-        self._obs_buffer = np.zeros((2, *shape), dtype=dtype)
+        self._obs_buffer = np.zeros((2, *shape), dtype=dtype)  # type: ignore[misc]
 
     def step(self, action):
         total_reward = 0.0
@@ -165,7 +164,7 @@ class FireResetEnv(gym.Wrapper):
 
     def __init__(self, env: gym.Env) -> None:
         super().__init__(env)
-        meanings = env.unwrapped.get_action_meanings()
+        meanings = env.unwrapped.get_action_meanings()  # type: ignore[attr-defined]
         assert "FIRE" in meanings, "FireResetEnv requires FIRE in action_meanings"
         assert len(meanings) >= 3
 
@@ -229,7 +228,7 @@ class FrameStack(gym.Wrapper):
         self.k = int(k)
         self._frames: deque[np.ndarray] = deque(maxlen=self.k)
         inner_shape = env.observation_space.shape
-        assert len(inner_shape) == 2, (
+        assert inner_shape is not None and len(inner_shape) == 2, (
             f"FrameStack expects single-channel (H, W) obs; got {inner_shape}"
         )
         h, w = inner_shape
@@ -283,7 +282,7 @@ def make_atari_env(
     env = MaxAndSkipEnv(env, skip=frame_skip)
     if episodic_life:
         env = EpisodicLifeEnv(env)
-    if fire_reset and "FIRE" in env.unwrapped.get_action_meanings():
+    if fire_reset and "FIRE" in env.unwrapped.get_action_meanings():  # type: ignore[attr-defined]
         env = FireResetEnv(env)
     env = WarpFrame(env)
     if clip_reward:

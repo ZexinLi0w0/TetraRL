@@ -18,10 +18,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import gymnasium as gym
 import numpy as np
 import pytest
-
-import gymnasium as gym
 from gymnasium import spaces
 
 from tetrarl.morl.atari_wrappers import (
@@ -34,7 +33,6 @@ from tetrarl.morl.atari_wrappers import (
     WarpFrame,
     make_atari_env,
 )
-
 
 try:
     import ale_py  # noqa: F401
