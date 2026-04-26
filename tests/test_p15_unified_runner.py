@@ -12,10 +12,13 @@ asserts:
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNNER = REPO_ROOT / "scripts" / "p15_unified_runner.py"
@@ -124,3 +127,72 @@ def test_runner_per_step_jsonl_lines(tmp_path: Path) -> None:
     assert expected_keys.issubset(first.keys()), (
         f"missing keys: {expected_keys - set(first.keys())}"
     )
+
+
+def test_runner_no_longer_deferreds_breakout(tmp_path: Path) -> None:
+    """The DEFERRED branch for Atari has been removed.
+
+    Acceptable summary statuses: ``COMPLETED`` (when ALE+cv2 are installed) or
+    ``ERROR`` (when those deps are missing — gymnasium raises ImportError and
+    the runner's ERROR branch records it). The forbidden status is
+    ``DEFERRED``.
+    """
+    out_dir = tmp_path / "cell"
+    proc = _run_cli(
+        [
+            "--algo", "dqn",
+            "--wrapper", "tetrarl",
+            "--env", "breakout",
+            "--platform", "mac",
+            "--seed", "0",
+            "--frames", "50",
+            "--out-dir", str(out_dir),
+        ]
+    )
+    summary_path = out_dir / "summary.json"
+    assert summary_path.exists(), (
+        f"summary.json was not written; stderr={proc.stderr!r}"
+    )
+    with summary_path.open() as f:
+        summary = json.load(f)
+    status = summary.get("status")
+    assert status != "DEFERRED", (
+        f"Atari is still in the DEFERRED branch: {summary}"
+    )
+    assert status in {"COMPLETED", "ERROR"}, (
+        f"unexpected status {status!r}: {summary}"
+    )
+
+
+def test_runner_completed_breakout_smoke(tmp_path: Path) -> None:
+    """Full Atari training smoke test; only runs when ALE + cv2 are installed."""
+    pytest.importorskip("ale_py")
+    if importlib.util.find_spec("cv2") is None:
+        pytest.skip("cv2 not installed")
+    out_dir = tmp_path / "cell"
+    n_frames = 100
+    proc = _run_cli(
+        [
+            "--algo", "dqn",
+            "--wrapper", "tetrarl",
+            "--env", "breakout",
+            "--platform", "mac",
+            "--seed", "0",
+            "--frames", str(n_frames),
+            "--out-dir", str(out_dir),
+        ]
+    )
+    assert proc.returncode == 0, f"runner failed: stderr={proc.stderr!r}"
+    summary_path = out_dir / "summary.json"
+    assert summary_path.exists()
+    with summary_path.open() as f:
+        summary = json.load(f)
+    assert summary["status"] == "COMPLETED", f"status mismatch: {summary}"
+    assert int(summary["n_steps"]) == n_frames, (
+        f"expected {n_frames} steps, got {summary['n_steps']}"
+    )
+    assert isinstance(summary["cumulative_reward_curve"], list)
+    assert len(summary["cumulative_reward_curve"]) > 0, (
+        "expected at least one episode return"
+    )
+    assert float(summary["mean_p99_step_ms"]) > 0.0

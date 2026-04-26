@@ -6,9 +6,10 @@ Resolves the algo + wrapper, checks compatibility (writes a SKIPPED
 steps with the wrapper's per-step knob hook, writes ``per_step.jsonl`` +
 ``summary.json``.
 
-CartPole training is fully wired. Breakout enters a DEFERRED branch (no CNN
-backbone in ``tetrarl/morl/algos.py`` yet — Phase 1 work) but the CLI is
-complete so the matrix can be enumerated end-to-end today.
+CartPole and Atari obs (uint8 (4, 84, 84) frame-stacks from
+``tetrarl/morl/atari_wrappers.make_atari_env``) flow through the same
+training loop — the algo classes auto-detect a NatureCNN backbone from
+``obs_shape``.
 """
 from __future__ import annotations
 
@@ -114,17 +115,9 @@ def _make_env(env_name: str):
     if env_name == "cartpole":
         return gym.make("CartPole-v1")
     if env_name == "breakout":
-        # Best-effort registration: ALE/Breakout-v5 needs ale_py registered.
-        try:
-            import ale_py  # noqa: F401
+        from tetrarl.morl.atari_wrappers import make_atari_env
 
-            try:
-                gym.register_envs(ale_py)
-            except Exception:
-                pass
-        except Exception:
-            pass
-        return gym.make("ALE/Breakout-v5")
+        return make_atari_env("ALE/Breakout-v5")
     raise ValueError(f"unknown env: {env_name!r}")
 
 
@@ -160,17 +153,6 @@ def main() -> int:
         _write_summary(summary_path, payload)
         return 0
 
-    # --- env construction (with Breakout DEFERRED branch) ------------------
-    if args.env == "breakout":
-        payload = {
-            **base_payload,
-            "status": "DEFERRED",
-            "reason": "Atari training requires CNN backbone — wired in Phase 1",
-            "wall_time_s": 0.0,
-        }
-        _write_summary(summary_path, payload)
-        return 0
-
     t_wall0 = time.perf_counter()
 
     try:
@@ -185,7 +167,6 @@ def main() -> int:
         _write_summary(summary_path, payload)
         return 1
 
-    # CartPole-only branch from here.
     obs_shape: tuple[int, ...] = env.observation_space.shape  # type: ignore[assignment]
     n_actions = int(env.action_space.n)  # type: ignore[union-attr]
 
