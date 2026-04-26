@@ -197,3 +197,14 @@ tetrarl/morl/c_morl/externals/**/trained_models/
 !runs/w9_overhead_rebaseline_nano/**
 !runs/w9_dvfs_drl_nano/
 !runs/w9_dvfs_drl_nano/**
+# P15 Phase 4 results (Atari Breakout × Orin Nano, 25 cells = 21 DEFERRED + 4 SKIPPED).
+# Note: the 21 "active" cells are status=DEFERRED (NOT COMPLETED) because the
+# unified runner has a hardcoded DEFERRED branch for --env breakout pending a
+# proper CNN backbone (algos.py is currently MLP-only). The 4 SKIPPED cells are
+# the standard wrapper-algo compat misses (r3+a2c, r3+ppo, duojoule+a2c, duojoule+ppo).
+!runs/p15_phase4_orin_nano_atari/
+runs/p15_phase4_orin_nano_atari/*
+!runs/p15_phase4_orin_nano_atari/*/
+runs/p15_phase4_orin_nano_atari/*/*
+!runs/p15_phase4_orin_nano_atari/*/summary.json
+!runs/p15_phase4_orin_nano_atari/_phase4_summary.md

@@ -1,0 +1,11 @@
+{
+  "algo": "dqn",
+  "env": "breakout",
+  "frames": 50000,
+  "platform": "orin_nano",
+  "reason": "Atari training requires CNN backbone \u2014 wired in Phase 1",
+  "seed": 0,
+  "status": "DEFERRED",
+  "wall_time_s": 0.0,
+  "wrapper": "duojoule"
+}
