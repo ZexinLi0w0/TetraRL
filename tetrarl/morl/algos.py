@@ -1,8 +1,10 @@
 """Minimal but real DRL algorithms for the P15 matrix (DQN/DDQN/C51/A2C/PPO).
 
-CartPole-shape MLP backbone (hidden=64). Uniform interface across algos:
-``act / observe / update`` plus mutable ``batch_size`` / ``replay_capacity``
-knobs for system wrappers.
+CartPole-shape MLP backbone (hidden=64) by default; switches to a Mnih-2015
+NatureCNN encoder + uint8 replay when the observation looks like an Atari
+frame-stack ((C, 84, 84)). Uniform interface across algos: ``act / observe /
+update`` plus mutable ``batch_size`` / ``replay_capacity`` knobs for system
+wrappers.
 """
 from __future__ import annotations
 
@@ -32,16 +34,65 @@ def _mlp(in_dim: int, out_dim: int, hidden: int = 64) -> nn.Sequential:
     )
 
 
+def _is_atari_obs(obs_shape: tuple[int, ...]) -> bool:
+    """True when obs looks like an Atari frame-stack: (C, 84, 84)."""
+    return len(obs_shape) == 3 and tuple(obs_shape[1:]) == (84, 84)
+
+
+class NatureCNN(nn.Module):
+    """Mnih et al. 2015 Nature-DQN encoder. Input: (B, in_channels, 84, 84) uint8 or float."""
+
+    def __init__(self, in_channels: int = 4, out_dim: int = 512) -> None:
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, 32, 8, 4), nn.ReLU(),
+            nn.Conv2d(32, 64, 4, 2), nn.ReLU(),
+            nn.Conv2d(64, 64, 3, 1), nn.ReLU(),
+            nn.Flatten(),
+        )
+        self.fc = nn.Sequential(nn.Linear(64 * 7 * 7, out_dim), nn.ReLU())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.float() / 255.0
+        return self.fc(self.conv(x))  # type: ignore[no-any-return]
+
+
+class _CNNQNet(nn.Module):
+    """NatureCNN trunk + linear head producing ``out_dim`` logits."""
+
+    def __init__(self, in_channels: int, out_dim: int, feature_dim: int = 512) -> None:
+        super().__init__()
+        self.trunk = NatureCNN(in_channels=in_channels, out_dim=feature_dim)
+        self.head = nn.Linear(feature_dim, out_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.head(self.trunk(x))  # type: ignore[no-any-return]
+
+
+def _build_qnet(obs_shape: tuple[int, ...], out_dim: int) -> nn.Module:
+    """CNN if Atari, MLP otherwise."""
+    if _is_atari_obs(obs_shape):
+        return _CNNQNet(in_channels=int(obs_shape[0]), out_dim=out_dim)
+    in_dim = int(np.prod(obs_shape))
+    return _mlp(in_dim, out_dim)
+
+
 class ReplayBuffer:
     """Fixed-capacity ring buffer of (s, a, r, s', done) numpy arrays."""
 
-    def __init__(self, capacity: int, obs_shape: tuple[int, ...]) -> None:
+    def __init__(
+        self,
+        capacity: int,
+        obs_shape: tuple[int, ...],
+        obs_dtype: Any = np.float32,
+    ) -> None:
         self.capacity = int(capacity)
         self.obs_shape = obs_shape
-        self.s = np.zeros((self.capacity, *obs_shape), dtype=np.float32)
+        self.obs_dtype = obs_dtype
+        self.s = np.zeros((self.capacity, *obs_shape), dtype=obs_dtype)
         self.a = np.zeros((self.capacity,), dtype=np.int64)
         self.r = np.zeros((self.capacity,), dtype=np.float32)
-        self.sn = np.zeros((self.capacity, *obs_shape), dtype=np.float32)
+        self.sn = np.zeros((self.capacity, *obs_shape), dtype=obs_dtype)
         self.d = np.zeros((self.capacity,), dtype=np.float32)
         self._idx = 0
         self._size = 0
@@ -62,6 +113,21 @@ class ReplayBuffer:
     def sample(self, n: int) -> tuple[np.ndarray, ...]:
         idx = np.random.randint(0, self._size, size=n)
         return self.s[idx], self.a[idx], self.r[idx], self.sn[idx], self.d[idx]
+
+
+def _obs_to_tensor(
+    obs_batch: np.ndarray,
+    obs_shape: tuple[int, ...],
+    is_cnn: bool,
+    device: torch.device,
+) -> torch.Tensor:
+    """Reshape numpy obs into a torch tensor matching the backbone's expectations."""
+    if is_cnn:
+        x = obs_batch.reshape(obs_batch.shape[0], *obs_shape)
+        # NatureCNN.forward handles uint8 -> float / 255.
+        return torch.as_tensor(x, device=device)
+    flat = obs_batch.reshape(obs_batch.shape[0], -1)
+    return torch.as_tensor(flat, dtype=torch.float32, device=device)
 
 
 # --- DQN -------------------------------------------------------------------
@@ -101,12 +167,13 @@ class DQNAlgo:
         self.gamma = float(gamma)
         self.eps_start, self.eps_end = float(eps_start), float(eps_end)
         self.eps_decay_steps = int(eps_decay_steps)
-        in_dim = int(np.prod(obs_shape))
-        self.q = _mlp(in_dim, self.n_actions).to(self.device)
-        self.q_target = _mlp(in_dim, self.n_actions).to(self.device)
+        self._is_cnn = _is_atari_obs(obs_shape)
+        self.q = _build_qnet(obs_shape, self.n_actions).to(self.device)
+        self.q_target = _build_qnet(obs_shape, self.n_actions).to(self.device)
         self.q_target.load_state_dict(self.q.state_dict())
         self.opt = Adam(self.q.parameters(), lr=lr)
-        self.buffer = ReplayBuffer(self.replay_capacity, obs_shape)
+        obs_dtype = np.uint8 if self._is_cnn else np.float32
+        self.buffer = ReplayBuffer(self.replay_capacity, obs_shape, obs_dtype=obs_dtype)
         self._step = 0
 
     def _eps(self) -> float:
@@ -117,7 +184,7 @@ class DQNAlgo:
         if (not deterministic) and random.random() < self._eps():
             return random.randrange(self.n_actions)
         with torch.no_grad():
-            x = torch.as_tensor(obs.reshape(1, -1), dtype=torch.float32, device=self.device)
+            x = _obs_to_tensor(obs[None, ...], self.obs_shape, self._is_cnn, self.device)
             q = self.q(x)
             return int(torch.argmax(q, dim=-1).item())
 
@@ -136,8 +203,8 @@ class DQNAlgo:
         if len(self.buffer) < self.train_after:
             return {}
         s_np, a_np, r_np, sn_np, d_np = self.buffer.sample(self.batch_size)
-        s = torch.as_tensor(s_np.reshape(s_np.shape[0], -1), dtype=torch.float32, device=self.device)
-        sn = torch.as_tensor(sn_np.reshape(sn_np.shape[0], -1), dtype=torch.float32, device=self.device)
+        s = _obs_to_tensor(s_np, self.obs_shape, self._is_cnn, self.device)
+        sn = _obs_to_tensor(sn_np, self.obs_shape, self._is_cnn, self.device)
         a = torch.as_tensor(a_np, dtype=torch.long, device=self.device)
         r = torch.as_tensor(r_np, dtype=torch.float32, device=self.device)
         d = torch.as_tensor(d_np, dtype=torch.float32, device=self.device)
@@ -209,12 +276,14 @@ class C51Algo:
         self.eps_decay_steps = int(eps_decay_steps)
         self.delta_z = (self.v_max - self.v_min) / (self.n_atoms - 1)
         self.support = torch.linspace(self.v_min, self.v_max, self.n_atoms, device=self.device)
-        in_dim = int(np.prod(obs_shape))
-        self.q = _mlp(in_dim, self.n_actions * self.n_atoms).to(self.device)
-        self.q_target = _mlp(in_dim, self.n_actions * self.n_atoms).to(self.device)
+        self._is_cnn = _is_atari_obs(obs_shape)
+        out_dim = self.n_actions * self.n_atoms
+        self.q = _build_qnet(obs_shape, out_dim).to(self.device)
+        self.q_target = _build_qnet(obs_shape, out_dim).to(self.device)
         self.q_target.load_state_dict(self.q.state_dict())
         self.opt = Adam(self.q.parameters(), lr=lr)
-        self.buffer = ReplayBuffer(self.replay_capacity, obs_shape)
+        obs_dtype = np.uint8 if self._is_cnn else np.float32
+        self.buffer = ReplayBuffer(self.replay_capacity, obs_shape, obs_dtype=obs_dtype)
         self._step = 0
 
     def _eps(self) -> float:
@@ -234,7 +303,7 @@ class C51Algo:
         if (not deterministic) and random.random() < self._eps():
             return random.randrange(self.n_actions)
         with torch.no_grad():
-            x = torch.as_tensor(obs.reshape(1, -1), dtype=torch.float32, device=self.device)
+            x = _obs_to_tensor(obs[None, ...], self.obs_shape, self._is_cnn, self.device)
             dist = self._dist(x)  # (1, A, atoms)
             q = (dist * self.support).sum(dim=-1)  # (1, A)
             return int(torch.argmax(q, dim=-1).item())
@@ -248,8 +317,8 @@ class C51Algo:
             return {}
         s_np, a_np, r_np, sn_np, d_np = self.buffer.sample(self.batch_size)
         B = s_np.shape[0]
-        s = torch.as_tensor(s_np.reshape(B, -1), dtype=torch.float32, device=self.device)
-        sn = torch.as_tensor(sn_np.reshape(B, -1), dtype=torch.float32, device=self.device)
+        s = _obs_to_tensor(s_np, self.obs_shape, self._is_cnn, self.device)
+        sn = _obs_to_tensor(sn_np, self.obs_shape, self._is_cnn, self.device)
         a = torch.as_tensor(a_np, dtype=torch.long, device=self.device)
         r = torch.as_tensor(r_np, dtype=torch.float32, device=self.device)
         d = torch.as_tensor(d_np, dtype=torch.float32, device=self.device)
@@ -306,13 +375,40 @@ class _ActorCritic(nn.Module):
         return self.pi(h), self.v(h).squeeze(-1)
 
 
+class _CNNActorCritic(nn.Module):
+    """NatureCNN trunk + linear policy/value heads."""
+
+    def __init__(self, in_channels: int, n_actions: int, feature_dim: int = 512) -> None:
+        super().__init__()
+        self.shared = NatureCNN(in_channels=in_channels, out_dim=feature_dim)
+        self.pi = nn.Linear(feature_dim, n_actions)
+        self.v = nn.Linear(feature_dim, 1)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        h = self.shared(x)
+        return self.pi(h), self.v(h).squeeze(-1)
+
+
+def _build_actor_critic(obs_shape: tuple[int, ...], n_actions: int) -> nn.Module:
+    if _is_atari_obs(obs_shape):
+        return _CNNActorCritic(in_channels=int(obs_shape[0]), n_actions=n_actions)
+    in_dim = int(np.prod(obs_shape))
+    return _ActorCritic(in_dim, n_actions)
+
+
 class _RolloutBuffer:
-    def __init__(self, rollout_steps: int, obs_shape: tuple[int, ...]) -> None:
+    def __init__(
+        self,
+        rollout_steps: int,
+        obs_shape: tuple[int, ...],
+        obs_dtype: Any = np.float32,
+    ) -> None:
         self.cap = int(rollout_steps)
-        self.s = np.zeros((self.cap, *obs_shape), dtype=np.float32)
+        self.obs_dtype = obs_dtype
+        self.s = np.zeros((self.cap, *obs_shape), dtype=obs_dtype)
         self.a = np.zeros((self.cap,), dtype=np.int64)
         self.r = np.zeros((self.cap,), dtype=np.float32)
-        self.sn = np.zeros((self.cap, *obs_shape), dtype=np.float32)
+        self.sn = np.zeros((self.cap, *obs_shape), dtype=obs_dtype)
         self.d = np.zeros((self.cap,), dtype=np.float32)
         self.logp = np.zeros((self.cap,), dtype=np.float32)
         self.v = np.zeros((self.cap,), dtype=np.float32)
@@ -366,10 +462,11 @@ class _OnPolicyBase:
         self.vf_coef = float(vf_coef)
         # batch_size mirror so wrappers can read/write a uniform attribute.
         self.batch_size = int(mini_batch_size)
-        in_dim = int(np.prod(obs_shape))
-        self.net = _ActorCritic(in_dim, self.n_actions).to(self.device)
+        self._is_cnn = _is_atari_obs(obs_shape)
+        self.net = _build_actor_critic(obs_shape, self.n_actions).to(self.device)
         self.opt = Adam(self.net.parameters(), lr=lr)
-        self.buffer = _RolloutBuffer(self.rollout_steps, obs_shape)
+        obs_dtype = np.uint8 if self._is_cnn else np.float32
+        self.buffer = _RolloutBuffer(self.rollout_steps, obs_shape, obs_dtype=obs_dtype)
         self._last_logp: float = 0.0
         self._last_v: float = 0.0
 
@@ -379,7 +476,7 @@ class _OnPolicyBase:
 
     def act(self, obs: np.ndarray, deterministic: bool = False) -> int:
         with torch.no_grad():
-            x = torch.as_tensor(obs.reshape(1, -1), dtype=torch.float32, device=self.device)
+            x = _obs_to_tensor(obs[None, ...], self.obs_shape, self._is_cnn, self.device)
             logits, v = self.net(x)
             dist = torch.distributions.Categorical(logits=logits)
             if deterministic:
@@ -414,7 +511,7 @@ class _OnPolicyBase:
             return 0.0
         last_sn = self.buffer.sn[self.buffer.size - 1]
         with torch.no_grad():
-            x = torch.as_tensor(last_sn.reshape(1, -1), dtype=torch.float32, device=self.device)
+            x = _obs_to_tensor(last_sn[None, ...], self.obs_shape, self._is_cnn, self.device)
             _, v = self.net(x)
             return float(v.item())
 
@@ -431,7 +528,7 @@ class A2CAlgo(_OnPolicyBase):
         last_v = self._last_value()
         adv, ret = self._gae(last_v)
         n = self.buffer.size
-        s = torch.as_tensor(self.buffer.s[:n].reshape(n, -1), dtype=torch.float32, device=self.device)
+        s = _obs_to_tensor(self.buffer.s[:n], self.obs_shape, self._is_cnn, self.device)
         a = torch.as_tensor(self.buffer.a[:n], dtype=torch.long, device=self.device)
         adv_t = torch.as_tensor(adv, dtype=torch.float32, device=self.device)
         ret_t = torch.as_tensor(ret, dtype=torch.float32, device=self.device)
@@ -462,7 +559,7 @@ class PPOAlgo(_OnPolicyBase):
         last_v = self._last_value()
         adv, ret = self._gae(last_v)
         n = self.buffer.size
-        s = torch.as_tensor(self.buffer.s[:n].reshape(n, -1), dtype=torch.float32, device=self.device)
+        s = _obs_to_tensor(self.buffer.s[:n], self.obs_shape, self._is_cnn, self.device)
         a = torch.as_tensor(self.buffer.a[:n], dtype=torch.long, device=self.device)
         old_logp = torch.as_tensor(self.buffer.logp[:n], dtype=torch.float32, device=self.device)
         adv_t = torch.as_tensor(adv, dtype=torch.float32, device=self.device)
