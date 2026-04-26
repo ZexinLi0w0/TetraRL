@@ -1,0 +1,11 @@
+{
+  "algo": "ppo",
+  "env": "cartpole",
+  "frames": 50000,
+  "platform": "orin_agx",
+  "reason": "wrapper duojoule incompatible with ppo",
+  "seed": 1,
+  "status": "SKIPPED",
+  "wall_time_s": 0.0,
+  "wrapper": "duojoule"
+}

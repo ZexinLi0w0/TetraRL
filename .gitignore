@@ -126,6 +126,15 @@ runs/p11_dst_headtohead/*_seed*/*.pt.duojoule
 !runs/p12_multitenant_grpo/without_critic_seed*/llm_inf.csv
 # P15 Phase 0 deliverable (Atari Nano probe report)
 !runs/p15_atari_nano_probe.md
+# P15 Phase 1 results (CartPole × Orin AGX, 75 cells = 63 COMPLETED + 12 SKIPPED).
+# Whitelist only summary.json (per_step.jsonl files total ~768 MB, kept on Orin only).
+!runs/p15_phase1_orin_agx_cartpole/
+runs/p15_phase1_orin_agx_cartpole/*
+!runs/p15_phase1_orin_agx_cartpole/*/
+runs/p15_phase1_orin_agx_cartpole/*/*
+!runs/p15_phase1_orin_agx_cartpole/*/summary.json
+!runs/p15_phase1_orin_agx_cartpole/_phase1_summary.csv
+!runs/p15_phase1_orin_agx_cartpole/_phase1_summary.md
 # Only whitelist the per-omega winner Markdown report; the JSONL eval
 # logs themselves stay ignored (regenerable from the matrix YAML).
 !runs/w10_orin_full_fixed/
