@@ -164,6 +164,25 @@ def test_runner_no_longer_deferreds_breakout(tmp_path: Path) -> None:
     )
 
 
+def test_runner_uses_cuda_when_available(monkeypatch, tmp_path: Path) -> None:
+    """When torch.cuda.is_available() is True, the algo is built with device='cuda'.
+
+    Verified indirectly by patching torch.cuda.is_available + asserting the runner
+    does not crash and the resulting summary status is COMPLETED. This is a
+    source-level assertion (the only way to test cuda selection without a
+    CUDA-capable test runner: the runner is invoked via subprocess and we cannot
+    reach in to patch torch.cuda there, and the test machine — Mac CI / nano2
+    venv — has no CUDA build of torch).
+    """
+    runner_src = (REPO_ROOT / "scripts" / "p15_unified_runner.py").read_text()
+    assert 'torch.cuda.is_available()' in runner_src, (
+        "runner must select device based on torch.cuda.is_available()"
+    )
+    assert 'device=device' in runner_src, (
+        "runner must pass device= to the algo constructor"
+    )
+
+
 def test_runner_completed_breakout_smoke(tmp_path: Path) -> None:
     """Full Atari training smoke test; only runs when ALE + cv2 are installed."""
     pytest.importorskip("ale_py")

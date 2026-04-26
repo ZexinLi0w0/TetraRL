@@ -138,6 +138,7 @@ def main() -> int:
     }
 
     _seed_all(args.seed)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     algo_class = ALGO_REGISTRY[args.algo]
     wrapper = make_wrapper(args.wrapper)
@@ -170,7 +171,7 @@ def main() -> int:
     obs_shape: tuple[int, ...] = env.observation_space.shape  # type: ignore[assignment]
     n_actions = int(env.action_space.n)  # type: ignore[union-attr]
 
-    algo = algo_class(obs_shape=obs_shape, n_actions=n_actions, seed=args.seed)
+    algo = algo_class(obs_shape=obs_shape, n_actions=n_actions, seed=args.seed, device=device)
     wrapper.wrap(algo)
 
     # Reset CUDA peak-memory tracking if available.
