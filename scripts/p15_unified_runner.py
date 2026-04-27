@@ -348,6 +348,8 @@ def main() -> int:
         "n_episodes": int(len(episode_returns)),
         "cumulative_reward_curve": [float(x) for x in episode_returns],
         "framework_overhead_pct": float(framework_overhead_pct),
+        "mean_total_step_ms": float(mean_total),
+        "mean_framework_step_ms": float(mean_fw),
         "mean_deadline_miss_rate": float(mean_deadline_miss_rate),
         "mean_p99_step_ms": float(mean_p99_step_ms),
         "peak_gpu_memory_mb": float(peak_gpu_memory_mb),
