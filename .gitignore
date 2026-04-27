@@ -197,3 +197,11 @@ tetrarl/morl/c_morl/externals/**/trained_models/
 !runs/w9_overhead_rebaseline_nano/**
 !runs/w9_dvfs_drl_nano/
 !runs/w9_dvfs_drl_nano/**
+
+# P15 Phase 3 results (Atari Breakout × Orin AGX, 75 cells = 63 COMPLETED + 12 SKIPPED).
+# Whitelist only summary.json (per_step.jsonl files total ~2.9 GB, kept on Orin only).
+!runs/p15_phase3_orin_agx_atari/
+runs/p15_phase3_orin_agx_atari/*
+!runs/p15_phase3_orin_agx_atari/*/
+runs/p15_phase3_orin_agx_atari/*/*
+!runs/p15_phase3_orin_agx_atari/*/summary.json
