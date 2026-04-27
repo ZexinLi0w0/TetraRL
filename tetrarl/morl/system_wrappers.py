@@ -35,13 +35,27 @@ def _is_off_policy(algo_class: Type[Any]) -> bool:
 
 
 class MaxAWrapper(SystemWrapper):
-    """Pin DVFS to the maximum-frequency index (always max action — max compute)."""
+    """Pin DVFS to the maximum-frequency index AND force a small minibatch.
+
+    Spec (Phase 6, 2026-04-26): MaxA = max-action policy = max DVFS + minibatch=16.
+    The batch_size knob is propagated through every ``step_hook`` so the runner
+    echoes it in summary metrics for the controlled-budget protocol.
+
+    For on-policy A2C/PPO the algo's ``batch_size`` mirrors ``mini_batch_size``;
+    setting it shrinks PPO mini-batches (A2C ignores it for the rollout-loss
+    pass but the wrapper still pins it for metric consistency).
+    """
 
     name = "maxa"
 
-    def __init__(self, max_dvfs_idx: int = 11, **kwargs: Any) -> None:
-        # Default 11 = top-most index for Orin AGX 12-step DVFS table.
+    def __init__(
+        self,
+        max_dvfs_idx: int = 11,
+        batch_size: int = 16,
+        **kwargs: Any,
+    ) -> None:
         self.max_dvfs_idx = int(max_dvfs_idx)
+        self.batch_size = int(batch_size)
         self._step_count = 0
 
     def is_compatible(self, algo_class: Type[Any]) -> bool:
@@ -49,25 +63,44 @@ class MaxAWrapper(SystemWrapper):
 
     def wrap(self, algo_instance: Any, **kwargs: Any) -> Any:
         self._algo = algo_instance
+        if hasattr(algo_instance, "batch_size"):
+            algo_instance.batch_size = self.batch_size
+        if hasattr(algo_instance, "mini_batch_size"):
+            algo_instance.mini_batch_size = self.batch_size
         return algo_instance
 
     def step_hook(self, step_idx: int, algo_state: dict[str, Any]) -> WrapperKnobs:
         self._step_count += 1
-        return WrapperKnobs(dvfs_idx=self.max_dvfs_idx)
+        return WrapperKnobs(dvfs_idx=self.max_dvfs_idx, batch_size=self.batch_size)
 
     def get_metrics(self) -> dict[str, Any]:
-        return {"wrapper": self.name, "dvfs_pinned_idx": self.max_dvfs_idx, "n_steps": self._step_count}
+        return {
+            "wrapper": self.name,
+            "dvfs_pinned_idx": self.max_dvfs_idx,
+            "batch_size": self.batch_size,
+            "n_steps": self._step_count,
+        }
 
 
 # --- MaxP ------------------------------------------------------------------
 
 
 class MaxPWrapper(SystemWrapper):
-    """Pin DVFS to index 0 (TetraRL convention = max performance)."""
+    """Pin DVFS to index 0 AND force a large minibatch (max performance).
+
+    Spec (Phase 6, 2026-04-26): MaxP = max-perf policy = DVFS index 0 (highest
+    perf in TetraRL convention) + minibatch=128. Batch is propagated through
+    every step_hook for runner metric consistency.
+    """
 
     name = "maxp"
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        batch_size: int = 128,
+        **kwargs: Any,
+    ) -> None:
+        self.batch_size = int(batch_size)
         self._step_count = 0
 
     def is_compatible(self, algo_class: Type[Any]) -> bool:
@@ -75,14 +108,23 @@ class MaxPWrapper(SystemWrapper):
 
     def wrap(self, algo_instance: Any, **kwargs: Any) -> Any:
         self._algo = algo_instance
+        if hasattr(algo_instance, "batch_size"):
+            algo_instance.batch_size = self.batch_size
+        if hasattr(algo_instance, "mini_batch_size"):
+            algo_instance.mini_batch_size = self.batch_size
         return algo_instance
 
     def step_hook(self, step_idx: int, algo_state: dict[str, Any]) -> WrapperKnobs:
         self._step_count += 1
-        return WrapperKnobs(dvfs_idx=0)
+        return WrapperKnobs(dvfs_idx=0, batch_size=self.batch_size)
 
     def get_metrics(self) -> dict[str, Any]:
-        return {"wrapper": self.name, "dvfs_pinned_idx": 0, "n_steps": self._step_count}
+        return {
+            "wrapper": self.name,
+            "dvfs_pinned_idx": 0,
+            "batch_size": self.batch_size,
+            "n_steps": self._step_count,
+        }
 
 
 # --- R³ --------------------------------------------------------------------

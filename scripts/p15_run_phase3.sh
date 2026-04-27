@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# P15 Phase 1 — CartPole × Orin AGX, 75 cells (63 COMPLETED + 12 SKIPPED) × 50k frames.
-# Runs N-way parallel with xargs; resumable (skips cells whose summary.json already exists).
+# P15 Phase 3 — Atari Breakout × Orin AGX, 75 cells (63 COMPLETED + 12 SKIPPED).
+# Phase 6 (2026-04-26): added COMPUTE_BUDGET env var to switch to the
+# controlled-budget protocol (total_env_steps * batch_size = const). When
+# COMPUTE_BUDGET is empty the script falls back to FRAMES (legacy protocol).
+# Resumable: skips cells whose summary.json already exists.
 
 set -uo pipefail
 
 REPO_ROOT="${REPO_ROOT:-/experiment/zexin/TetraRL}"
 VENV_ROOT="${VENV_ROOT:-/experiment/zexin/venvs/r3}"
-OUT_ROOT="${OUT_ROOT:-${REPO_ROOT}/runs/p15_phase1_orin_agx_cartpole}"
+OUT_ROOT="${OUT_ROOT:-${REPO_ROOT}/runs/p15_phase3_orin_agx_atari}"
 PARALLEL="${PARALLEL:-3}"
-FRAMES="${FRAMES:-50000}"
+FRAMES="${FRAMES:-200000}"
 COMPUTE_BUDGET="${COMPUTE_BUDGET:-}"
+PLATFORM="${PLATFORM:-orin_agx}"
 SEEDS=(0 1 2)
 ALGOS=(dqn ddqn c51 a2c ppo)
 WRAPPERS=(maxa maxp r3 duojoule tetrarl)
@@ -30,11 +34,10 @@ build_jobs() {
   for algo in "${ALGOS[@]}"; do
     for wrapper in "${WRAPPERS[@]}"; do
       for seed in "${SEEDS[@]}"; do
-        local cell="cartpole__orin_agx__${algo}__${wrapper}__seed${seed}"
+        local cell="atari__${PLATFORM}__${algo}__${wrapper}__seed${seed}"
         local out_dir="${OUT_ROOT}/${cell}"
         local sm="${out_dir}/summary.json"
         if [[ -f "${sm}" ]]; then
-          # Already done (resumable).
           continue
         fi
         echo "${algo}|${wrapper}|${seed}|${out_dir}|${cell}"
@@ -52,8 +55,8 @@ run_one() {
     "${VENV_PY}" "${REPO_ROOT}/scripts/p15_unified_runner.py" \
       --algo "${algo}" \
       --wrapper "${wrapper}" \
-      --env cartpole \
-      --platform orin_agx \
+      --env breakout \
+      --platform "${PLATFORM}" \
       --seed "${seed}" \
       --frames "${FRAMES}" \
       --compute-budget "${COMPUTE_BUDGET}" \
@@ -63,8 +66,8 @@ run_one() {
     "${VENV_PY}" "${REPO_ROOT}/scripts/p15_unified_runner.py" \
       --algo "${algo}" \
       --wrapper "${wrapper}" \
-      --env cartpole \
-      --platform orin_agx \
+      --env breakout \
+      --platform "${PLATFORM}" \
       --seed "${seed}" \
       --frames "${FRAMES}" \
       --out-dir "${out_dir}" \
@@ -75,14 +78,9 @@ run_one() {
   return ${rc}
 }
 
-# Guard: only execute the launch body when this script is run directly,
-# not when it is sourced (so build_jobs / run_one can be tested in isolation).
-# shellcheck disable=SC2128
 if [[ "${BASH_SOURCE}" != "$0" ]]; then
   return 0 2>/dev/null || true
 fi
-
-# --- launch body --------------------------------------------------------------
 
 VENV_PY="${VENV_ROOT}/bin/python"
 if [[ ! -x "${VENV_PY}" ]]; then
@@ -95,10 +93,10 @@ mkdir -p "${OUT_ROOT}" "${LOG_DIR}"
 cd "${REPO_ROOT}"
 
 export -f run_one
-export REPO_ROOT VENV_PY LOG_DIR FRAMES COMPUTE_BUDGET
+export REPO_ROOT VENV_PY LOG_DIR FRAMES COMPUTE_BUDGET PLATFORM
 
 n_jobs=$(build_jobs | wc -l | tr -d ' ')
-echo "P15 Phase 1: ${n_jobs} pending cells, parallel=${PARALLEL}, frames=${FRAMES}, compute_budget=${COMPUTE_BUDGET:-<none>}"
+echo "P15 Phase 3: ${n_jobs} pending cells, parallel=${PARALLEL}, frames=${FRAMES}, compute_budget=${COMPUTE_BUDGET:-<none>}, platform=${PLATFORM}"
 echo "REPO_ROOT=${REPO_ROOT}"
 echo "VENV_PY=${VENV_PY}"
 echo "OUT_ROOT=${OUT_ROOT}"

@@ -60,6 +60,18 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--frames", type=int, default=1000)
+    p.add_argument(
+        "--compute-budget",
+        type=int,
+        default=None,
+        help=(
+            "If set, run until total_env_steps * effective_batch_size >= compute_budget "
+            "instead of using --frames. effective_batch_size is read from "
+            "wrapper.get_metrics()['batch_size'] when present, else algo.batch_size. "
+            "Used for the Phase 6 controlled-budget protocol (batch-invariant "
+            "wall + energy comparison)."
+        ),
+    )
     p.add_argument("--out-dir", required=True)
     return p.parse_args()
 
@@ -138,7 +150,19 @@ def main() -> int:
     }
 
     _seed_all(args.seed)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if args.platform == "orin_agx":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "P15 Phase 6: --platform=orin_agx must run on GPU; "
+                "torch.cuda.is_available() is False. Check the venv has the JetPack-6 "
+                "torch wheel (e.g. /experiment/zexin/venvs/r3 with torch>=2.8.0+cu126)."
+            )
+        device = "cuda"
+    elif args.platform == "orin_nano":
+        # Nano JetPack-5 cp310 has no GPU torch wheel; CPU only.
+        device = "cpu"
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
     algo_class = ALGO_REGISTRY[args.algo]
     wrapper = make_wrapper(args.wrapper)
@@ -199,7 +223,15 @@ def main() -> int:
 
     try:
         with per_step_path.open("w") as jl:
-            for step_idx in range(int(args.frames)):
+            wrapper_metrics_init = wrapper.get_metrics()
+            effective_batch_size = int(
+                wrapper_metrics_init.get("batch_size", getattr(algo, "batch_size", 64))
+            )
+            if args.compute_budget is not None:
+                target_steps = max(1, int(args.compute_budget) // max(1, effective_batch_size))
+            else:
+                target_steps = int(args.frames)
+            for step_idx in range(target_steps):
                 memory_util = min(0.95, 0.1 + step_idx * 1e-5)
                 algo_state = {
                     "last_step_ms": last_step_ms,
@@ -305,6 +337,8 @@ def main() -> int:
     mean_energy_j = float(np.mean(energy_j_list)) if energy_j_list else 0.0
     time_to_converge_steps = _time_to_converge(episode_returns)
     wrapper_metrics = wrapper.get_metrics()
+    total_wall_seconds = float(sum(total_step_ms_list)) / 1000.0
+    total_energy_j = float(sum(energy_j_list))
 
     payload = {
         **base_payload,
@@ -320,6 +354,11 @@ def main() -> int:
         "mean_energy_j": float(mean_energy_j),
         "time_to_converge_steps": int(time_to_converge_steps),
         "wrapper_metrics": wrapper_metrics,
+        "compute_budget": int(args.compute_budget) if args.compute_budget is not None else None,
+        "effective_batch_size": int(effective_batch_size),
+        "target_steps": int(target_steps),
+        "total_wall_seconds": float(total_wall_seconds),
+        "total_energy_j": float(total_energy_j),
     }
     _write_summary(summary_path, payload)
     return 0
