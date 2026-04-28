@@ -651,11 +651,14 @@ class EvalRunner:
         if int(cfg.n_envs) > 1:
             return self._run_vec_env(cfg)
 
-        env = gym.make(cfg.env_name)
-        # Wrap multi-objective DAG env so the scalar-reward eval loop can
-        # consume its 4-vector reward via omega @ r_vec. Defaults to a
-        # uniform 4-D omega when none is provided in cfg.extra.
-        if cfg.env_name.startswith("dag_scheduler_mo"):
+        # Multi-objective envs (e.g. dag_scheduler_mo-v0) emit a vector reward
+        # that the gymnasium PassiveEnvChecker mis-flags as an invalid scalar
+        # reward type. We disable the auto checker for those envs and instead
+        # rely on the explicit MOAggregateWrapper below to scalarise the reward
+        # via omega @ r_vec for the downstream scalar-reward eval loop.
+        is_mo_env = cfg.env_name.startswith("dag_scheduler_mo")
+        env = gym.make(cfg.env_name, disable_env_checker=is_mo_env)
+        if is_mo_env:
             from tetrarl.envs.wrappers import MOAggregateWrapper
             omega_vec = cfg.extra.get("omega") if cfg.extra else None
             if omega_vec is None:
@@ -866,7 +869,10 @@ class EvalRunner:
             omega_vec = [0.25, 0.25, 0.25, 0.25]
 
         def _make_one(env_name: str = env_name):
-            e = gym.make(env_name)
+            # Same rationale as in run(): MO envs emit vector reward; the
+            # PassiveEnvChecker would mis-flag it before MOAggregateWrapper
+            # scalarises it. Disable the auto checker for MO envs only.
+            e = gym.make(env_name, disable_env_checker=wrap_mo)
             if wrap_mo:
                 from tetrarl.envs.wrappers import MOAggregateWrapper
                 e = MOAggregateWrapper(e, omega=np.asarray(omega_vec, dtype=np.float32))
